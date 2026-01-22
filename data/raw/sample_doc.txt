@@ -1,0 +1,13 @@
+Sample Document for RAG Testing
+
+This is a sample document that demonstrates how the RAG system works.
+The system will chunk this document, create embeddings, and store them
+in a FAISS index for efficient retrieval.
+
+Key Concepts:
+- Vector embeddings represent text semantically
+- FAISS enables fast similarity search
+- RAG combines retrieval with generation
+- Citations help trace information back to sources
+
+Add your own documents here to build a custom knowledge base.
