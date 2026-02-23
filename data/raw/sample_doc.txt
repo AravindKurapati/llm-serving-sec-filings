@@ -10,4 +10,3 @@ Key Concepts:
 - RAG combines retrieval with generation
 - Citations help trace information back to sources
 
-Add your own documents here to build a custom knowledge base.
