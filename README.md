@@ -1,264 +1,149 @@
-# vLLM Serving 
+# LLM Serving on SEC Filings
 
-> **Fast, production-grade LLM serving with built-in RAG and performance benchmarking**
+> RAG over real 10-K filings - LLaMA 3.1 8B vs Mistral 7B, benchmarked on A10G via Modal
 
-A complete starter kit for serving LLMs with vLLM, featuring retrieval-augmented generation (RAG) examples and tools to measure prefill/decode performance. Optimized for Kaggle dual T4 GPUs or single local GPU setups.
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![vLLM](https://img.shields.io/badge/vLLM-latest-green.svg)](https://github.com/vllm-project/vllm)
+This project started as a Kaggle notebook and evolved into a production Modal deployment after hitting real infrastructure walls. The repo preserves both versions. The original attempt and the working solution!
 
 ---
 
 ## What This Does
 
-- **Production LLM serving** using vLLM's OpenAI-compatible API
-- **RAG implementation** with FAISS vector search and BGE embeddings
-- **Performance benchmarking** tools for TTFT, TPOT, and throughput analysis
-- **Prefill/decode optimization** insights and measurement utilities
-
-**Core principle:** Prefill is compute-bound, decoding is memory bandwidth-bound. This project helps you measure and optimize each phase independently.
-
----
-
-##  Quick Start
-
-### 1. Installation
-
-```bash
-git clone https://github.com/yourusername/vllm-serving-rag
-cd vllm-serving-rag
-pip install -r requirements.txt
-```
-
-### 2. Configuration
-
-```bash
-# Set your Hugging Face token
-export HF_TOKEN=hf_your_token_here
-export MODEL=meta-llama/Meta-Llama-3.1-8B-Instruct
-export PORT=8000
-```
-
-### 3. Start the Server
-
-**Local (single GPU):**
-```bash
-./scripts/start_server.sh
-```
-
-**Kaggle (dual T4):**
-```bash
-./scripts/start_server_kaggle.sh
-```
-
-### 4. Test It
-
-```bash
-# Simple chat completion
-python examples/simple_chat.py
-
-# RAG with citations
-python examples/rag_demo.py "What are Apple's main risk factors?"
-
-# Run benchmarks
-python examples/benchmark.py
-```
+- Downloads real SEC 10-K filings (Apple, Microsoft, Google, Amazon, Meta - 3 years each)
+- Chunks and embeds them with BGE-small into a FAISS index
+- Serves LLaMA 3.1 8B and Mistral 7B via vLLM on Modal A10G GPUs
+- Benchmarks TTFT, TPOT, and throughput for both models
+- Exposes a FastAPI endpoint for a Streamlit chat frontend
 
 ---
 
-## Project Structure
+## Results
+
+Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens:
+
+| Metric | LLaMA 3.1 8B | Mistral 7B |
+|--------|-------------|------------|
+| TTFT p50 | 4,616ms | 1,015ms |
+| TTFT p95 | 4,631ms | 2,402ms |
+| TPOT p50 | 23.1ms | 23.5ms |
+| Throughput avg | 28.9 tok/s | 28.6 tok/s |
+
+**Key finding**: Mistral is 4.5x faster on TTFT with nearly identical throughput and TPOT. The bottleneck is prefill, not decode. Mistral's smaller architecture prefills faster.
+
+Mistral also produced more concise, better-structured answers without the citation repetition artifacts LLaMA showed at the 400-token limit.
+
+Full results: [`results/benchmark_20260222.json`](results/benchmark_20260222.json)
+
+---
+
+## Repo Structure
 
 ```
-vllm-serving-rag/
-├── scripts/
-│   ├── start_server.sh           # Local server startup
-│   ├── start_server_kaggle.sh    # Kaggle-specific startup
-│   └── build_rag_index.py        # Build FAISS index from docs
-├── examples/
-│   ├── simple_chat.py            # Basic chat completion
-│   ├── streaming_chat.py         # Streaming responses
-│   ├── rag_demo.py               # RAG with citations
-│   ├── benchmark.py              # TTFT/TPOT measurements
-│   └── load_test.py              # Concurrent request testing
-├── notebooks/
-│   └── kaggle_full_demo.ipynb    # Complete Kaggle notebook
-├── data/
-│   ├── raw/                      # Raw documents for RAG
-│   └── processed/                # FAISS indexes and metadata
-├── docs/
-│   ├── architecture.md           # System design details
-│   ├── performance.md            # Optimization guide
-│   └── deployment.md             # Production deployment tips
+llm-serving-sec-filings/
+├── v1_kaggle/                  # Original Kaggle attempt
+│   ├── llm-serving-claude.ipynb
+│   ├── issues.md               # Dependency hell — what broke and why
+│   └── README.md
+│
+├── v2_modal/                   # Working production version
+│   ├── finsight.py             # Modal backend (vLLM + FAISS + FastAPI)
+│   ├── app.py                  # Streamlit frontend
+│   └── README.md
+│
+├── results/
+│   ├── benchmark_20260222.json # Raw benchmark output
+│   └── analysis.md             # Findings and interpretation
+│
+├── scripts/                    # Utility scripts
+├── utils/                      # Shared utilities
+├── docs/                       # Architecture and deployment docs
 ├── requirements.txt
-└── README.md
+└── .env.example
 ```
 
 ---
 
-##  Features
+## Quick Start (v2 Modal)
 
-### vLLM Server
-- Continuous batching for high throughput
-- PagedAttention for efficient memory usage
-- OpenAI-compatible API endpoints
-- Chunked prefill support
-- Multi-GPU tensor parallelism
+### Prerequisites
+- Modal account (modal.com — free tier includes $30/month)
+- HuggingFace account with LLaMA and Mistral access approved
 
-### RAG Capabilities
-- FAISS vector search integration
-- BGE embeddings for retrieval
-- Citation-aware response generation
-- Custom document chunking strategies
+### Setup
 
-### Benchmarking Tools
-- **TTFT** (Time To First Token) - Prefill latency
-- **TPOT** (Time Per Output Token) - Decode speed
-- **Throughput** - Tokens per second
-- **Load testing** - Concurrent request handling
-
----
-
-## Example Usage
-
-### Simple Chat
-```python
-from openai import OpenAI
-import os
-
-client = OpenAI(
-    base_url=f"http://127.0.0.1:{os.getenv('PORT', '8000')}/v1",
-    api_key="not-needed"
-)
-
-response = client.chat.completions.create(
-    model=os.getenv("MODEL"),
-    messages=[{"role": "user", "content": "Explain transformers in one sentence."}],
-    max_tokens=50
-)
-
-print(response.choices[0].message.content)
-```
-
-### RAG Query
 ```bash
-python examples/rag_demo.py "What are Microsoft's cloud revenue drivers?"
+pip install modal
+modal setup          # authenticates via browser
 ```
 
-Output:
-```
-Microsoft's cloud revenue is driven by Azure growth and Office 365 adoption [1][2].
-Key risks include macroeconomic factors and foreign exchange volatility [1].
+Add your HuggingFace token as a Modal secret:
+- Go to modal.com -> Secrets -> New secret -> HuggingFace template
+- Name it `huggingface-secret`
 
-Sources:
-[1] MSFT_10K_mda.txt
-[2] MSFT_10K_risk.txt
-```
+### First Run (builds index, benchmarks both models)
 
-### Benchmark
 ```bash
-python examples/benchmark.py --prompt "Explain GPU memory bandwidth" --max-tokens 128
+cd v2_modal
+modal run finsight.py
+# Takes ~15 min first time (downloads models + builds FAISS index)
+# Costs ~$0.50-1.00 in Modal credits
 ```
 
-Output:
+### Deploy API Endpoint
+
+```bash
+modal deploy finsight.py
+# Prints your public URL:
+# https://your-workspace--finsight-api-query.modal.run
 ```
-TTFT: 0.23s
-TPOT: 0.042s/token
-Throughput: 23.8 tokens/s
-Total tokens: 128
+
+### Run Streamlit Frontend
+
+```bash
+# Paste your Modal URL into app.py's MODAL_URL variable first
+pip install streamlit requests
+streamlit run v2_modal/app.py
 ```
 
 ---
 
-##  Deployment Options
+## Why Not Kaggle?
 
-### Kaggle (2× T4 GPUs)
-1. Upload notebook from `notebooks/kaggle_full_demo.ipynb`
-2. Add `HF_TOKEN` to Kaggle Secrets
-3. Enable GPU (T4 x2) accelerator
-4. Run all cells
+See [`v1_kaggle/issues.md`](v1_kaggle/issues.md) for the full story.
 
-See [docs/deployment.md](docs/deployment.md#kaggle) for details.
-
-### Local Development
-- **Single GPU**: Works out of the box with 16GB+ VRAM
-- **Multi-GPU**: Set `CUDA_VISIBLE_DEVICES` and adjust tensor parallelism
-- **CPU**: Not recommended (extremely slow)
-
-See [docs/deployment.md](docs/deployment.md#local) for configuration details.
-
-### Production
-- Use docker-compose for orchestration
-- Configure load balancing and autoscaling
-- Monitor with Prometheus/Grafana
-
-See [docs/deployment.md](docs/deployment.md#production) for production setup.
+Short version: Kaggle's T4 GPUs are sm_75. Modern vLLM (0.6+) requires FlashInfer for its attention backend, and FlashInfer dropped sm_75 support. Every workaround (pinning old vLLM, pinning tokenizers, patching source files) created a new dependency conflict. After hitting the same wall on Colab, the right fix was to use Modal's A10G (sm_86) where latest vLLM just works.
 
 ---
 
-##  Documentation
+## Architecture
 
-- **[Architecture Guide](docs/architecture.md)** - System design and component overview
-- **[Performance Tuning](docs/performance.md)** - Optimize prefill and decode phases
-- **[Deployment Guide](docs/deployment.md)** - Production deployment strategies
-- **[API Reference](docs/api.md)** - Complete API documentation
+```
+User
+ └─ Streamlit (runs locally)
+     └─ POST /v1/chat (Modal public URL)
+         └─ FastAPI endpoint (Modal, CPU)
+             └─ vLLM LLM.generate() (Modal, A10G GPU)
+                 ├─ BGE-small embedder → FAISS retrieval
+                 └─ LLaMA 3.1 8B or Mistral 7B
+                     └─ Modal Volume (persists index + model weights)
+```
 
----
-
-
-
-### Roadmap: DistServe-Style Disaggregation
-Future plans to separate prefill and decode into independent services:
-- Dedicated prefill instances (GPU compute optimized)
-- Dedicated decode instances (memory bandwidth optimized)
-- KV cache transfer between services
-- SLO enforcement: TTFT ≤ 250ms, TPOT ≤ 50ms/token
+Modal Volumes mean model weights are cached after the first download — subsequent runs skip the 84-second download and go straight to inference.
 
 ---
 
-##  Requirements
+## Roadmap
 
-- **Python**: 3.10 or higher
-- **GPU**: CUDA-compatible (16GB+ VRAM recommended)
-- **Hugging Face**: Read access token for model downloads
-
-See [requirements.txt](requirements.txt) for complete dependency list.
-
----
-
-##  Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| `401 Unauthorized` on model download | Check `HF_TOKEN` is set correctly |
-| CUDA Out of Memory | Reduce `--max-model-len` or enable tensor parallelism |
-| Server not responding | Check logs: `tail -f /path/to/vllm.log` |
-| Slow performance on T4 | FlashAttention v2 not available; using PyTorch fallback (expected) |
-
-See [docs/troubleshooting.md](docs/troubleshooting.md) for more solutions.
+- [ ] RAGAS evaluation (faithfulness, answer relevancy, context precision)
+- [ ] Streaming responses with real TTFT measurement
+- [ ] Add Fastino SLM when API becomes available
+- [ ] DistServe-style prefill/decode disaggregation experiment
 
 ---
 
-##  Contributing
+## Requirements
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
-##  License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-##  Acknowledgments
-
-- [vLLM](https://github.com/vllm-project/vllm) for the serving engine
-- [FAISS](https://github.com/facebookresearch/faiss) for vector search
-- [Sentence Transformers](https://www.sbert.net/) for embeddings
-
+- Python 3.11+
+- Modal CLI (`pip install modal`)
+- HuggingFace token with access to:
+  - `meta-llama/Meta-Llama-3.1-8B-Instruct`
+  - `mistralai/Mistral-7B-Instruct-v0.3`
