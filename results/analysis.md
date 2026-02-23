@@ -2,7 +2,7 @@
 
 **Date**: February 22, 2026  
 **Hardware**: Modal A10G (24GB VRAM, sm_86)  
-**Dataset**: 15 SEC 10-K filings (AAPL, MSFT, GOOGL, AMZN, META — 3 years each)  
+**Dataset**: 15 SEC 10-K filings (AAPL, MSFT, GOOGL, AMZN, META for 3 years each)  
 **Index**: 4,782 chunks, BGE-small-en-v1.5 (384 dims), FAISS IndexFlatIP  
 **Questions**: 5 financial analysis questions  
 
