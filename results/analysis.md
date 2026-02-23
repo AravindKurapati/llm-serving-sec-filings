@@ -1,4 +1,4 @@
-# Benchmark Analysis — LLaMA 3.1 8B vs Mistral 7B
+# Benchmark Analysis: LLaMA 3.1 8B vs Mistral 7B
 
 **Date**: February 22, 2026  
 **Hardware**: Modal A10G (24GB VRAM, sm_86)  
@@ -22,11 +22,11 @@
 
 ## TTFT Analysis
 
-TTFT measures prefill time — how long it takes to process the input prompt before generating the first output token. For RAG, the input is large: system prompt + 5 retrieved chunks + question = 600-1,300 tokens.
+TTFT measures prefill time - how long it takes to process the input prompt before generating the first output token. For RAG, the input is large: system prompt + 5 retrieved chunks + question = 600-1,300 tokens.
 
 LLaMA 3.1 8B consistently took ~4,600ms to prefill regardless of input length. Mistral 7B ranged from 562ms (short prompt) to 2,402ms (long prompt), showing more sensitivity to input length but significantly faster on average.
 
-This matters for user experience. In a chat interface, TTFT is the perceived "thinking time" before any text appears. Mistral feels 4.5x more responsive.
+In a chat interface, TTFT is the perceived "thinking time" before any text appears. Mistral feels 4.5x more responsive.
 
 **Why is Mistral faster on prefill?**
 - Mistral 7B uses sliding window attention (SWA) which is more efficient on longer sequences
@@ -37,7 +37,7 @@ This matters for user experience. In a chat interface, TTFT is the perceived "th
 
 ## TPOT and Throughput Analysis
 
-Both models generated tokens at ~23ms per token (~29 tok/s). This is expected — at this scale both models are memory-bandwidth bound during decode, and they share the same A10G VRAM bandwidth.
+Both models generated tokens at ~23ms per token (~29 tok/s). This is expected cause at this scale both models are memory-bandwidth bound during decode, and they share the same A10G VRAM bandwidth.
 
 The A10G has 600 GB/s memory bandwidth. Loading 8B parameters in fp16 (16GB) per forward pass is the bottleneck, not compute. Both 7B and 8B models hit this ceiling at essentially the same speed.
 
@@ -52,10 +52,10 @@ The A10G has 600 GB/s memory bandwidth. Loading 8B parameters in fp16 (16GB) per
 
 **Mistral 7B strengths:**
 - Stops when the answer is complete (used 46-217 tokens vs LLaMA's consistent 400)
-- Cleaner citation format — cites once, moves on
+- Cleaner citation format - cites once, moves on
 - More direct synthesis of retrieved context
 
-**Example — Apple supply chain risks:**
+**Example - Apple supply chain risks:**
 
 LLaMA output: 400 tokens, ends with `[1], [2], [4], [5] [1], [2], [4], [5]...` repeated 15+ times
 
@@ -67,9 +67,9 @@ Mistral output: 217 tokens, 6 clean bullet points, stops naturally
 
 For financial document Q&A where answers should be concise and grounded:
 
-- **Mistral is the better choice** — faster TTFT and cleaner outputs
+- **Mistral is the better choice** cause faster TTFT and cleaner outputs
 - **LLaMA may be better** for tasks requiring longer, more exhaustive answers with higher token budgets
-- **Throughput is not the differentiator** at this scale — both models are memory-bandwidth bound
+- **Throughput is not the differentiator** at this scale - both models are memory-bandwidth bound
 
 For latency-sensitive applications (real-time chat, streaming):
 - Mistral's 1,015ms p50 TTFT is within acceptable range for interactive use
