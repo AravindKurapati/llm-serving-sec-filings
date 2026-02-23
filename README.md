@@ -1,14 +1,14 @@
 # LLM Serving on SEC Filings
 
-> RAG over real 10-K filings — LLaMA 3.1 8B vs Mistral 7B, benchmarked on A10G via Modal
+> RAG over real 10-K filings: LLaMA 3.1 8B vs Mistral 7B, benchmarked on A10G via Modal
 
-This project started as a Kaggle notebook and evolved into a production Modal deployment after hitting real infrastructure walls. The repo preserves both versions — the original attempt and the working solution — because the journey is as useful as the destination.
+This project started as a Kaggle notebook and evolved into a production Modal deployment after hitting real infrastructure walls. The repo preserves both versions. (the original attempt and the working solution)
 
 ---
 
 ## What This Does
 
-- Downloads real SEC 10-K filings (Apple, Microsoft, Google, Amazon, Meta — 3 years each)
+- Downloads real SEC 10-K filings (Apple, Microsoft, Google, Amazon, Meta for 3 years each)
 - Chunks and embeds them with BGE-small into a FAISS index
 - Serves LLaMA 3.1 8B and Mistral 7B via vLLM on Modal A10G GPUs
 - Benchmarks TTFT, TPOT, and throughput for both models
@@ -27,7 +27,7 @@ Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens:
 | TPOT p50 | 23.1ms | 23.5ms |
 | Throughput avg | 28.9 tok/s | 28.6 tok/s |
 
-**Key finding**: Mistral is 4.5x faster on TTFT with nearly identical throughput and TPOT. The bottleneck is prefill, not decode. Mistral's smaller architecture prefills faster — important for latency-sensitive RAG applications where the prompt is long (context + retrieved chunks).
+**Key finding**: Mistral is 4.5x faster on TTFT with nearly identical throughput and TPOT. The bottleneck is prefill, not decode. Mistral's smaller architecture prefills faster.
 
 Mistral also produced more concise, better-structured answers without the citation repetition artifacts LLaMA showed at the 400-token limit.
 
@@ -65,7 +65,7 @@ llm-serving-sec-filings/
 ## Quick Start (v2 Modal)
 
 ### Prerequisites
-- Modal account (modal.com — free tier includes $30/month)
+- Modal account (modal.com with free tier includes $30/month)
 - HuggingFace account with LLaMA and Mistral access approved
 
 ### Setup
@@ -76,7 +76,7 @@ modal setup          # authenticates via browser
 ```
 
 Add your HuggingFace token as a Modal secret:
-- Go to modal.com → Secrets → New secret → HuggingFace template
+- Go to modal.com -> Secrets -> New secret -> HuggingFace template
 - Name it `huggingface-secret`
 
 ### First Run (builds index, benchmarks both models)
@@ -127,16 +127,7 @@ User
                      └─ Modal Volume (persists index + model weights)
 ```
 
-Modal Volumes mean model weights are cached after the first download — subsequent runs skip the 84-second download and go straight to inference.
-
----
-
-## Roadmap
-
-- [ ] RAGAS evaluation (faithfulness, answer relevancy, context precision)
-- [ ] Streaming responses with real TTFT measurement
-- [ ] Add Fastino SLM when API becomes available
-- [ ] DistServe-style prefill/decode disaggregation experiment
+Modal Volumes mean model weights are cached after the first download. Subsequent runs skip the 84-second download and go straight to inference.
 
 ---
 
