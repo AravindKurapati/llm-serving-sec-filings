@@ -138,14 +138,6 @@ if len(chunk.split()) < 50:
     continue  # Skip very short chunks
 ```
 
-## Best Practices
-
-1. **Start small** - Test with 5-10 companies first
-2. **Verify downloads** - Check file sizes and content quality
-3. **Monitor index quality** - Sample random chunks to verify extraction
-4. **Version your indexes** - Tag with date/version for reproducibility
-5. **Backup raw data** - SEC filings can be removed/updated
-
 ## Example Workflows
 
 ### Comparative Analysis
