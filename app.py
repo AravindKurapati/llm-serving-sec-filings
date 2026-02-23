@@ -1,10 +1,9 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="FinSight", page_icon="📊")
+st.set_page_config(page_title="FinSight", page_icon="$")
 st.title("FinSight - SEC Filing Q&A")
 
-# After modal deploy, paste your endpoint URL here
 MODAL_URL = "https://arvind-kurapati--finsight-api-query.modal.run"
 
 model = st.sidebar.selectbox("Model", ["llama", "mistral"])
