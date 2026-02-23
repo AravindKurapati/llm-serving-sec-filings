@@ -1,4 +1,4 @@
-# v1 Kaggle — What Broke and Why
+# v1 Kaggle: What Broke and Why
 
 This documents every error hit trying to run vLLM on Kaggle T4 GPUs. Preserved here because the debugging process is useful context for anyone trying to run modern LLM serving on older hardware.
 
@@ -14,7 +14,7 @@ Modern vLLM (0.6+) uses **FlashInfer** as its default attention backend. FlashIn
 
 ## Error Timeline
 
-### Error 1 — FlashInfer CUDA compilation failure
+### Error 1 - FlashInfer CUDA compilation failure
 ```
 cutlass.base_dsl.common.DSLRuntimeError: ICE
 NVVM Compilation Error: Target Architecture: sm_75
@@ -29,7 +29,7 @@ NVVM Compilation Error: Target Architecture: sm_75
 
 ---
 
-### Error 2 — outlines import failure on first request
+### Error 2 - outlines import failure on first request
 ```
 ModuleNotFoundError: No module named 'outlines.fsm'
 ```
@@ -40,7 +40,7 @@ ModuleNotFoundError: No module named 'outlines.fsm'
 
 ---
 
-### Error 3 — pyairports missing
+### Error 3 - pyairports missing
 ```
 ModuleNotFoundError: No module named 'pyairports'
 ```
@@ -54,7 +54,7 @@ ModuleNotFoundError: No module named 'pyairports'
 
 ---
 
-### Error 4 — tokenizers binary incompatibility
+### Error 4 - tokenizers binary incompatibility
 ```
 AttributeError: TokenizersBackend has no attribute all_special_tokens_extended
 ```
@@ -67,7 +67,7 @@ AttributeError: TokenizersBackend has no attribute all_special_tokens_extended
 
 ---
 
-### Error 5 — transformers/tokenizers version matrix
+### Error 5 - transformers/tokenizers version matrix
 ```
 ImportError: cannot import name 'is_offline_mode' from 'huggingface_hub'
 ```
@@ -90,7 +90,7 @@ Moved to Google Colab hoping for a cleaner base image. Hit the exact same tokeni
 
 ### Attempted: latest vLLM on Colab
 
-Latest vLLM requires `transformers>=4.45` for the `mllama` module. But latest vLLM also re-introduced FlashInfer as default on T4, causing the original sm_75 error. Setting `VLLM_ATTENTION_BACKEND=XFORMERS` in the subprocess env should have worked but the env var propagation was unreliable across Modal/subprocess boundaries.
+Latest vLLM requires `transformers>=4.45` for the `mllama` module. But latest vLLM also re-introduced FlashInfer as default on T4, causing the original sm_75 error. Setting `VLLM_ATTENTION_BACKEND=XFORMERS` in the subprocess env should have worked but the env var propagation was unreliable across Modal boundaries.
 
 ---
 
@@ -103,10 +103,10 @@ Latest vLLM requires `transformers>=4.45` for the `mllama` module. But latest vL
 | vLLM new (0.15+) | Needs FlashInfer, which requires sm_80+ |
 | Platform | Both Kaggle and Colab pre-install conflicting versions |
 
-There is no version of vLLM that works cleanly on T4 with current Kaggle/Colab base images. The only real solutions are:
+There is no version of vLLM that works cleanly on T4 with current Kaggle/Colab base images. The only  solutions are:
 1. Use newer GPU hardware (sm_80+)
 2. Use a completely clean Docker environment with pinned deps
-3. Use transformers directly (no vLLM) — slower but works
+3. Use transformers directly (no vLLM) but it would be slower.
 
 ---
 
