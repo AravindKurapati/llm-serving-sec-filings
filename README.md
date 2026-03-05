@@ -130,6 +130,8 @@ User
 Modal Volumes mean model weights are cached after the first download. Subsequent runs skip the 84-second download and go straight to inference.
 
 ---
+## Status
+**Ongoing**: Infrastructure benchmarking complete (TTFT, throughput, latency). Currently testing and evaluating output quality using RAGAS. Measuring faithfulness, answer relevancy and context precision on SEC financial QA.
 
 ## Requirements
 
