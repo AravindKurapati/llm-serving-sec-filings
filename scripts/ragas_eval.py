@@ -101,7 +101,7 @@ GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"     # RAGAS judge
 # Evaluation parameters — all match finsight.py defaults
 TESTSET_SIZE        = 15
 TOP_K               = 5
-CORPUS_SAMPLE_SIZE  = 80
+CORPUS_SAMPLE_SIZE  = 30
 MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
@@ -244,7 +244,7 @@ def build_langchain_docs(
         src     = chunk.get("src", chunk.get("source", "unknown"))
         company = chunk.get("company", src.split("_")[0])
         docs.append(Document(
-            page_content=chunk["text"],
+            page_content=chunk["text"][:500],
             metadata={"source": src, "company": company, "doc_id": chunk.get("doc_id", "")},
         ))
 
