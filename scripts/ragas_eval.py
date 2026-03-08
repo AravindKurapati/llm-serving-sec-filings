@@ -276,8 +276,7 @@ def generate_testset(docs: list[Document]) -> list[dict]:
 
     generator = TestsetGenerator(
         llm=make_groq_llm(GROQ_GENERATOR_LLM, temperature=0.4),
-        critic_llm=make_groq_llm(GROQ_CRITIC_LLM, temperature=0.0),
-        embeddings=ragas_embedder,
+        embedding_model=ragas_embedder,
     )
 
     # generate_with_langchain_docs was renamed in some patch versions — handle both
@@ -286,11 +285,13 @@ def generate_testset(docs: list[Document]) -> list[dict]:
     else:
         testset = generator.generate(docs, testset_size=TESTSET_SIZE)
 
-    # Defensive field access: RAGAS v0.2 minor versions differ on attribute names
+    # ragas 0.4+: samples are TestsetSample(eval_sample=SingleTurnSample, synthesizer_name=...)
+    # Older versions exposed user_input/reference directly on the sample object.
     pairs = []
     for sample in testset.samples:
-        question     = getattr(sample, "user_input",    getattr(sample, "question",     ""))
-        ground_truth = getattr(sample, "reference",     getattr(sample, "ground_truth", ""))
+        inner        = getattr(sample, "eval_sample", sample)
+        question     = getattr(inner, "user_input",    getattr(inner, "question",     ""))
+        ground_truth = getattr(inner, "reference",     getattr(inner, "ground_truth", ""))
         if not question:
             continue
         pairs.append({"question": question, "ground_truth": ground_truth})
