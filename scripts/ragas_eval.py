@@ -94,7 +94,7 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 # Groq model IDs
 GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"       # proxy for LLaMA 3.1 8B
 GROQ_MISTRAL_MODEL = "mixtral-8x7b-32768"          # proxy for Mistral 7B (NOTE: MoE)
-GROQ_GENERATOR_LLM = "llama-3.1-8b-instant"        # TestsetGenerator question writer
+GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"     # TestsetGenerator question writer
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"     # TestsetGenerator critic
 GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"     # RAGAS judge
 
@@ -115,11 +115,12 @@ RETRY_BACKOFF_FACTOR   = 2.0
 # Section 2: Groq LLM factory + retry wrapper
 # ─────────────────────────────────────────────────────────────────────────────
 
-def make_groq_llm(model_name: str, temperature: float = 0.0) -> LangchainLLMWrapper:
+def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512) -> LangchainLLMWrapper:
     """Create a RAGAS-compatible LangChain-wrapped Groq LLM with built-in retry."""
     llm = ChatGroq(
         model=model_name,
         temperature=temperature,
+        max_tokens=max_tokens,
         max_retries=5,
         request_timeout=60,
     )
