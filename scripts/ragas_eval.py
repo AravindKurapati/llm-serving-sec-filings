@@ -216,6 +216,13 @@ def build_langchain_docs(
     Samples `sample_size` chunks with diversity across companies and filing
     years so the generated questions span the full corpus, not just one company.
     """
+    # Drop XBRL/XML schema chunks — they crash SummaryExtractor with unparseable content.
+    def _is_prose(chunk: dict) -> bool:
+        t = chunk.get("text", "")
+        return not (t.startswith("<?xml") or "<" in t or "auth_ref" in t or "xbrl" in t.lower())
+
+    meta = [c for c in meta if _is_prose(c)]
+
     # Group by company (handles both finsight.py "src" and build_rag_index.py "source")
     by_company: dict[str, list[dict]] = {}
     for chunk in meta:
