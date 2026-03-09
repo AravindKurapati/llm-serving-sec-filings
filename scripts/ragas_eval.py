@@ -15,7 +15,8 @@ The FinSight vLLM deployment on Modal runs:
 
 This evaluation uses Groq API proxies (no Modal GPU required):
   - LLaMA  proxy : groq/llama-3.1-8b-instant   (same base model, different serving)
-  - Mistral proxy: groq/mixtral-8x7b-32768      (DIFFERENT: 8x7B MoE, not 7B dense)
+  - Mistral proxy: groq/llama3-8b-8192          (DIFFERENT MODEL: mixtral-8x7b-32768 was
+                                                  decommissioned by Groq with no replacement)
 
 Scores are indicative of model family quality, not bit-for-bit equivalence
 with the vLLM-served versions.
@@ -54,6 +55,7 @@ Expected runtime: 12-18 minutes (Groq free-tier rate limits).
 
 import argparse
 import json
+import math
 import os
 import random
 import sys
@@ -82,6 +84,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 # ── RAGAS v0.2 imports ────────────────────────────────────────────────────────
 from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
+from ragas.run_config import RunConfig
 from ragas.metrics import faithfulness, answer_relevancy, context_precision
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
@@ -101,7 +104,7 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Groq model IDs
 GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"       # proxy for LLaMA 3.1 8B
-GROQ_MISTRAL_MODEL = "mixtral-8x7b-32768"          # proxy for Mistral 7B (NOTE: MoE)
+GROQ_MISTRAL_MODEL = "llama3-8b-8192"              # proxy for Mistral 7B (mixtral-8x7b-32768 decommissioned by Groq)
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"     # TestsetGenerator question writer
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"     # TestsetGenerator critic
 GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"     # RAGAS judge
@@ -114,10 +117,11 @@ MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
 # Groq rate-limit settings (free tier: 30 RPM, 6k TPM)
-INTER_REQUEST_DELAY_S  = 3.0
-RETRY_MAX_ATTEMPTS     = 5
-RETRY_BASE_DELAY_S     = 10.0
-RETRY_BACKOFF_FACTOR   = 2.0
+INTER_REQUEST_DELAY_S      = 3.0
+RETRY_MAX_ATTEMPTS         = 5
+RETRY_BASE_DELAY_S         = 10.0
+RETRY_BACKOFF_FACTOR       = 2.0
+RAGAS_INTER_SAMPLE_DELAY_S = 60   # sleep between judge calls to avoid daily TPD exhaustion
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 2: Groq LLM factory + retry wrapper
@@ -422,33 +426,58 @@ def run_ragas_evaluation(
     model_label: str,
 ) -> dict:
     """
-    Run RAGAS v0.2 evaluate() with three metrics.
-    Judge LLM: llama-3.3-70b-versatile (Groq).
+    Run RAGAS evaluate() one sample at a time with a deliberate delay between
+    each to avoid exhausting the Groq daily TPD limit on the 70B judge model.
+
+    Each call to evaluate() is given a single-item EvaluationDataset.
+    Per-sample scores are collected and averaged at the end.
+    NaN results (judge returned unparseable output) are excluded from the mean.
     """
     print(f"\n[step 3] RAGAS evaluation: {model_label}")
     print(f"  metrics : faithfulness, answer_relevancy, context_precision")
     print(f"  judge   : {GROQ_EVALUATOR_LLM} (Groq)")
+    print(f"  mode    : sequential, {RAGAS_INTER_SAMPLE_DELAY_S}s delay between samples")
 
     evaluator_llm = make_groq_llm(GROQ_EVALUATOR_LLM, temperature=0.0)
     evaluator_emb = LangchainEmbeddingsWrapper(
         HuggingFaceEmbeddings(model_name=EMBED_MODEL)
     )
+    run_cfg = RunConfig(max_workers=1)
 
-    result = evaluate(
-        dataset=dataset,
-        metrics=[faithfulness, answer_relevancy, context_precision],
-        llm=evaluator_llm,
-        embeddings=evaluator_emb,
-        show_progress=True,
-    )
+    metric_names = ["faithfulness", "answer_relevancy", "context_precision"]
+    accumulated: dict[str, list[float]] = {m: [] for m in metric_names}
+
+    for i, sample in enumerate(dataset.samples):
+        print(f"  [sample {i+1:02d}/{len(dataset.samples)}] scoring ...")
+        single = EvaluationDataset(samples=[sample])
+        result = evaluate(
+            dataset=single,
+            metrics=[faithfulness, answer_relevancy, context_precision],
+            llm=evaluator_llm,
+            embeddings=evaluator_emb,
+            run_config=run_cfg,
+            show_progress=False,
+        )
+        for m in metric_names:
+            try:
+                val = float(result[m])
+                if not math.isnan(val):
+                    accumulated[m].append(val)
+            except (TypeError, ValueError):
+                pass
+
+        if i < len(dataset.samples) - 1:
+            print(f"  [throttle] sleeping {RAGAS_INTER_SAMPLE_DELAY_S}s ...")
+            time.sleep(RAGAS_INTER_SAMPLE_DELAY_S)
 
     scores = {}
-    for metric in ["faithfulness", "answer_relevancy", "context_precision"]:
-        try:
-            scores[metric] = round(float(result[metric]), 4)
-        except (TypeError, ValueError):
-            print(f"  [warn] {metric} returned NaN or None — setting to null")
-            scores[metric] = None
+    for m in metric_names:
+        vals = accumulated[m]
+        if vals:
+            scores[m] = round(sum(vals) / len(vals), 4)
+        else:
+            print(f"  [warn] {m} returned NaN for all samples — setting to null")
+            scores[m] = None
 
     print(f"  scores: {scores}")
     return scores
@@ -508,7 +537,7 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         ">\n",
         "> This evaluation uses Groq API proxies to avoid Modal GPU costs:\n",
         "> - **LLaMA proxy** : `llama-3.1-8b-instant` — same base model, different serving stack\n",
-        "> - **Mistral proxy**: `mixtral-8x7b-32768` — **architecturally different**: 8×7B MoE vs 7B dense\n",
+        "> - **Mistral proxy**: `llama3-8b-8192` — **different model**: `mixtral-8x7b-32768` was decommissioned by Groq\n",
         ">\n",
         "> Scores approximate model-family quality. Exact values will differ from the vLLM-served versions.\n",
         "\n",
@@ -516,8 +545,8 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "\n",
         "## Results Summary\n",
         "\n",
-        "| Metric | LLaMA 3.1 8B | Mistral proxy (MoE) |\n",
-        "|--------|:------------:|:-------------------:|\n",
+        "| Metric | LLaMA 3.1 8B | Mistral proxy (llama3-8b-8192) |\n",
+        "|--------|:------------:|:------------------------------:|\n",
     ]
     for m in metrics:
         lines.append(
@@ -547,7 +576,7 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "\n",
         "## Limitations\n",
         "\n",
-        "- Groq proxy models differ from deployed vLLM models (see caveat above — Mistral especially)\n",
+        "- Groq proxy models differ from deployed vLLM models (see caveat above — Mistral proxy is a different model family)\n",
         f"- Only {len(testset)} Q+GT pairs — increase `TESTSET_SIZE` for statistical robustness\n",
         "- Testset is synthetic; real user queries may differ in distribution\n",
         f"- RAGAS judge (`{GROQ_EVALUATOR_LLM}`) may favour certain answer styles\n",
@@ -622,7 +651,7 @@ def main():
         },
         {
             "key":        "mistral",
-            "label":      "Mistral proxy  (Groq: mixtral-8x7b-32768 MoE)",
+            "label":      "Mistral proxy  (Groq: llama3-8b-8192)",
             "groq_model": GROQ_MISTRAL_MODEL,
         },
     ]
@@ -653,7 +682,7 @@ def main():
     print("\n" + "=" * 65)
     print("RAGAS Evaluation Complete")
     print("=" * 65)
-    print(f"{'Metric':<25} {'LLaMA 3.1 8B':>15} {'Mistral (MoE)':>15}")
+    print(f"{'Metric':<25} {'LLaMA 3.1 8B':>15} {'Mistral proxy':>15}")
     print("-" * 55)
     for m in metrics:
         l_val  = all_results["llama"]["scores"].get(m)
