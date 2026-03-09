@@ -38,14 +38,21 @@ PREREQUISITES
 
 RUN
 ---
-   python scripts/ragas_eval.py
+   python scripts/ragas_eval.py                # uses data/testset.json (default)
+   python scripts/ragas_eval.py --generate     # synthetic testset via TestsetGenerator
 
-The testset is cached to results/ragas_testset.json after the first run.
-Delete that file to force regeneration.
+The bundled testset (data/testset.json) contains 10 hand-written Q+GT pairs
+covering revenue, operating income, R&D spend, risk factors, and segment
+performance for all five companies and is used by default.
+
+Pass --generate to fall back to the TestsetGenerator pipeline.  The synthetic
+testset is cached to results/ragas_testset.json after the first run; delete
+that file to force regeneration.
 
 Expected runtime: 12-18 minutes (Groq free-tier rate limits).
 """
 
+import argparse
 import json
 import os
 import random
@@ -84,11 +91,12 @@ from ragas.testset import TestsetGenerator
 # Section 1: Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-ROOT        = Path(__file__).parent.parent
-INDEX_DIR   = ROOT / "data" / "index"
-INDEX_PATH  = INDEX_DIR / "chunks.faiss"   # mirrors finsight.py:26
-META_PATH   = INDEX_DIR / "meta.npy"       # mirrors finsight.py:27
-RESULTS_DIR = ROOT / "results"
+ROOT               = Path(__file__).parent.parent
+INDEX_DIR          = ROOT / "data" / "index"
+INDEX_PATH         = INDEX_DIR / "chunks.faiss"   # mirrors finsight.py:26
+META_PATH          = INDEX_DIR / "meta.npy"       # mirrors finsight.py:27
+HARDCODED_TESTSET  = ROOT / "data" / "testset.json"
+RESULTS_DIR        = ROOT / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Groq model IDs
@@ -558,6 +566,15 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    parser = argparse.ArgumentParser(description="FinSight RAGAS Evaluation")
+    parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="Generate a synthetic testset via TestsetGenerator "
+             "(default: load the bundled data/testset.json)",
+    )
+    args = parser.parse_args()
+
     print("=" * 65)
     print("FinSight RAGAS Evaluation")
     print("=" * 65)
@@ -568,21 +585,27 @@ def main():
             "Add it to your .env file:  GROQ_API_KEY=gsk_...\n"
         )
 
-    # Load local FAISS index
+    # Load local FAISS index (needed by build_evaluation_dataset for retrieval)
     index, meta = load_index()
     embedder    = load_embedder()
-    docs        = build_langchain_docs(meta)
 
     # Load or generate testset
-    cache_path = RESULTS_DIR / "ragas_testset.json"
-    if cache_path.exists():
-        print(f"\n[cache] Loading testset from {cache_path}")
-        print("  (delete this file to regenerate from scratch)")
-        with open(cache_path, encoding="utf-8") as f:
+    if args.generate:
+        docs       = build_langchain_docs(meta)
+        cache_path = RESULTS_DIR / "ragas_testset.json"
+        if cache_path.exists():
+            print(f"\n[cache] Loading testset from {cache_path}")
+            print("  (delete this file to regenerate from scratch)")
+            with open(cache_path, encoding="utf-8") as f:
+                testset = json.load(f)
+            print(f"[ok] Loaded {len(testset)} Q+GT pairs")
+        else:
+            testset = generate_testset(docs)
+    else:
+        print(f"\n[hardcoded] Loading testset from {HARDCODED_TESTSET}")
+        with open(HARDCODED_TESTSET, encoding="utf-8") as f:
             testset = json.load(f)
         print(f"[ok] Loaded {len(testset)} Q+GT pairs")
-    else:
-        testset = generate_testset(docs)
 
     if len(testset) < 5:
         sys.exit(
