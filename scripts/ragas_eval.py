@@ -15,8 +15,8 @@ The FinSight vLLM deployment on Modal runs:
 
 This evaluation uses Groq API proxies (no Modal GPU required):
   - LLaMA  proxy : groq/llama-3.1-8b-instant   (same base model, different serving)
-  - Mistral proxy: groq/llama3-8b-8192          (DIFFERENT MODEL: mixtral-8x7b-32768 was
-                                                  decommissioned by Groq with no replacement)
+  - Mistral proxy: groq/llama-3.1-8b-instant    (DIFFERENT MODEL: mixtral decommissioned;
+                                                  llama3-8b-8192 subsequently also retired)
 
 Scores are indicative of model family quality, not bit-for-bit equivalence
 with the vLLM-served versions.
@@ -104,10 +104,10 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Groq model IDs
 GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"       # proxy for LLaMA 3.1 8B
-GROQ_MISTRAL_MODEL = "llama3-8b-8192"              # proxy for Mistral 7B (mixtral-8x7b-32768 decommissioned by Groq)
+GROQ_MISTRAL_MODEL = "llama-3.1-8b-instant"        # proxy for Mistral 7B (mixtral decommissioned; llama3-8b-8192 also retired)
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"     # TestsetGenerator question writer
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"     # TestsetGenerator critic
-GROQ_EVALUATOR_LLM = "meta-llama/llama-4-maverick-17b-128e-instruct"  # RAGAS judge
+GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"     # RAGAS judge (Maverick rejected n>1 sampling)
 
 # Evaluation parameters — all match finsight.py defaults
 TESTSET_SIZE        = 15
@@ -123,6 +123,7 @@ RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
 RAGAS_INTER_SAMPLE_DELAY_S = 60       # sleep between judge calls to avoid daily TPD exhaustion
 MIN_TPD_REMAINING          = 20_000   # abort if fewer than this many daily tokens remain
+                                      # Groq TPD resets at midnight UTC — run then if limit hit
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 2: Groq LLM factory + retry wrapper
@@ -575,7 +576,7 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         ">\n",
         "> This evaluation uses Groq API proxies to avoid Modal GPU costs:\n",
         "> - **LLaMA proxy** : `llama-3.1-8b-instant` — same base model, different serving stack\n",
-        "> - **Mistral proxy**: `llama3-8b-8192` — **different model**: `mixtral-8x7b-32768` was decommissioned by Groq\n",
+        "> - **Mistral proxy**: `llama-3.1-8b-instant` — **different model**: mixtral decommissioned; llama3-8b-8192 subsequently also retired\n",
         ">\n",
         "> Scores approximate model-family quality. Exact values will differ from the vLLM-served versions.\n",
         "\n",
@@ -583,8 +584,8 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "\n",
         "## Results Summary\n",
         "\n",
-        "| Metric | LLaMA 3.1 8B | Mistral proxy (llama3-8b-8192) |\n",
-        "|--------|:------------:|:------------------------------:|\n",
+        "| Metric | LLaMA 3.1 8B | Mistral proxy (llama-3.1-8b-instant) |\n",
+        "|--------|:------------:|:------------------------------------:|\n",
     ]
     for m in metrics:
         lines.append(
@@ -692,7 +693,7 @@ def main():
         },
         {
             "key":        "mistral",
-            "label":      "Mistral proxy  (Groq: llama3-8b-8192)",
+            "label":      "Mistral proxy  (Groq: llama-3.1-8b-instant)",
             "groq_model": GROQ_MISTRAL_MODEL,
         },
     ]
