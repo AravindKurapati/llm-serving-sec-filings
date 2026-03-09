@@ -107,7 +107,7 @@ GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"       # proxy for LLaMA 3.1 8B
 GROQ_MISTRAL_MODEL = "llama3-8b-8192"              # proxy for Mistral 7B (mixtral-8x7b-32768 decommissioned by Groq)
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"     # TestsetGenerator question writer
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"     # TestsetGenerator critic
-GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"     # RAGAS judge
+GROQ_EVALUATOR_LLM = "meta-llama/llama-4-maverick-17b-128e-instruct"  # RAGAS judge
 
 # Evaluation parameters — all match finsight.py defaults
 TESTSET_SIZE        = 15
@@ -121,7 +121,8 @@ INTER_REQUEST_DELAY_S      = 3.0
 RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
-RAGAS_INTER_SAMPLE_DELAY_S = 60   # sleep between judge calls to avoid daily TPD exhaustion
+RAGAS_INTER_SAMPLE_DELAY_S = 60       # sleep between judge calls to avoid daily TPD exhaustion
+MIN_TPD_REMAINING          = 20_000   # abort if fewer than this many daily tokens remain
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 2: Groq LLM factory + retry wrapper
@@ -164,6 +165,43 @@ def groq_call_with_retry(fn, *args, **kwargs):
                 raise
             print(f"  [error] attempt {attempt}/{RETRY_MAX_ATTEMPTS}: {exc}")
             time.sleep(delay)
+
+
+def preflight_tpd_check():
+    """
+    Make a minimal 1-token call to the RAGAS judge model and read the
+    x-ratelimit-remaining-tokens-day / x-ratelimit-limit-tokens-day
+    response headers.  Exits with a clear error if the remaining daily
+    token budget is below MIN_TPD_REMAINING.
+    """
+    from groq import Groq
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+
+    raw = client.chat.completions.with_raw_response.create(
+        model=GROQ_EVALUATOR_LLM,
+        messages=[{"role": "user", "content": "hi"}],
+        max_tokens=1,
+    )
+    headers = raw.headers
+    remaining = headers.get("x-ratelimit-remaining-tokens-day")
+    limit     = headers.get("x-ratelimit-limit-tokens-day")
+
+    remaining_int = int(remaining) if remaining else None
+    limit_int     = int(limit) if limit else None
+
+    if remaining_int is not None and limit_int is not None:
+        print(f"[preflight] TPD remaining: {remaining_int:,} / {limit_int:,}")
+    else:
+        print(f"[preflight] TPD headers not returned — skipping budget check")
+        print(f"  raw headers: remaining={remaining!r}, limit={limit!r}")
+        return
+
+    if remaining_int < MIN_TPD_REMAINING:
+        sys.exit(
+            f"[ERROR] Only {remaining_int:,} daily tokens remaining "
+            f"(minimum {MIN_TPD_REMAINING:,} required).\n"
+            f"Wait for the Groq daily limit to reset before running."
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -427,7 +465,7 @@ def run_ragas_evaluation(
 ) -> dict:
     """
     Run RAGAS evaluate() one sample at a time with a deliberate delay between
-    each to avoid exhausting the Groq daily TPD limit on the 70B judge model.
+    each to avoid exhausting the Groq daily TPD limit on the judge model.
 
     Each call to evaluate() is given a single-item EvaluationDataset.
     Per-sample scores are collected and averaged at the end.
@@ -613,6 +651,9 @@ def main():
             "[ERROR] GROQ_API_KEY is not set.\n"
             "Add it to your .env file:  GROQ_API_KEY=gsk_...\n"
         )
+
+    # Preflight: verify the judge model has enough daily token budget
+    preflight_tpd_check()
 
     # Load local FAISS index (needed by build_evaluation_dataset for retrieval)
     index, meta = load_index()
