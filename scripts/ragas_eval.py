@@ -129,7 +129,8 @@ MIN_TPD_REMAINING          = 20_000   # abort if fewer than this many daily toke
 # Section 2: Groq LLM factory + retry wrapper
 # ─────────────────────────────────────────────────────────────────────────────
 
-def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512) -> LangchainLLMWrapper:
+def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512,
+                  model_kwargs: dict | None = None) -> LangchainLLMWrapper:
     """Create a RAGAS-compatible LangChain-wrapped Groq LLM with built-in retry."""
     llm = ChatGroq(
         model=model_name,
@@ -137,6 +138,7 @@ def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 5
         max_tokens=max_tokens,
         max_retries=5,
         request_timeout=60,
+        model_kwargs=model_kwargs or {},
     )
     return LangchainLLMWrapper(llm)
 
@@ -477,7 +479,8 @@ def run_ragas_evaluation(
     print(f"  judge   : {GROQ_EVALUATOR_LLM} (Groq)")
     print(f"  mode    : sequential, {RAGAS_INTER_SAMPLE_DELAY_S}s delay between samples")
 
-    evaluator_llm = make_groq_llm(GROQ_EVALUATOR_LLM, temperature=0.0)
+    evaluator_llm = make_groq_llm(GROQ_EVALUATOR_LLM, temperature=0.0,
+                                   model_kwargs={"n": 1})
     evaluator_emb = LangchainEmbeddingsWrapper(
         HuggingFaceEmbeddings(model_name=EMBED_MODEL)
     )
