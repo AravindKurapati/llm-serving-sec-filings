@@ -130,17 +130,22 @@ MIN_TPD_REMAINING          = 20_000   # abort if fewer than this many daily toke
 # ─────────────────────────────────────────────────────────────────────────────
 
 def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512,
-                  model_kwargs: dict | None = None) -> LangchainLLMWrapper:
-    """Create a RAGAS-compatible LangChain-wrapped Groq LLM with built-in retry."""
+                  bypass_n: bool = False) -> LangchainLLMWrapper:
+    """Create a RAGAS-compatible LangChain-wrapped Groq LLM with built-in retry.
+
+    bypass_n=True: LangchainLLMWrapper will NOT set langchain_llm.n = n before
+    calling agenerate_prompt.  Instead it fans out to n separate single-completion
+    calls.  Required for Groq models that reject n>1 (e.g. llama-3.3-70b-versatile
+    on the free tier returns BadRequestError: 'n' must be at most 1).
+    """
     llm = ChatGroq(
         model=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
         max_retries=5,
         request_timeout=60,
-        model_kwargs=model_kwargs or {},
     )
-    return LangchainLLMWrapper(llm)
+    return LangchainLLMWrapper(llm, bypass_n=bypass_n)
 
 
 def groq_call_with_retry(fn, *args, **kwargs):
@@ -479,8 +484,7 @@ def run_ragas_evaluation(
     print(f"  judge   : {GROQ_EVALUATOR_LLM} (Groq)")
     print(f"  mode    : sequential, {RAGAS_INTER_SAMPLE_DELAY_S}s delay between samples")
 
-    evaluator_llm = make_groq_llm(GROQ_EVALUATOR_LLM, temperature=0.0,
-                                   model_kwargs={"n": 1})
+    evaluator_llm = make_groq_llm(GROQ_EVALUATOR_LLM, temperature=0.0, bypass_n=True)
     evaluator_emb = LangchainEmbeddingsWrapper(
         HuggingFaceEmbeddings(model_name=EMBED_MODEL)
     )
