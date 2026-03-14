@@ -50,7 +50,7 @@ Pass --generate to fall back to the TestsetGenerator pipeline.  The synthetic
 testset is cached to results/ragas_testset.json after the first run; delete
 that file to force regeneration.
 
-Expected runtime: 12-18 minutes (Groq free-tier rate limits).
+Expected runtime: ~30 minutes (10 samples x 90s throttle x 2 models).
 """
 
 import argparse
@@ -107,7 +107,7 @@ GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"
 GROQ_MISTRAL_MODEL = "llama-3.1-8b-instant"
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"
-GROQ_EVALUATOR_LLM = "meta-llama/llama-4-scout-17b-16e-instruct"  # 30K TPM, 500K TPD
+GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"   # 12K TPM, 100K TPD — confirmed working with bypass_n=True
 
 # Evaluation parameters
 TESTSET_SIZE        = 15
@@ -116,21 +116,23 @@ CORPUS_SAMPLE_SIZE  = 30
 MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
-# Judge max_tokens — needs to be high enough for RAGAS to complete its
-# chain-of-thought reasoning before outputting a score. 512 caused
-# LLMDidNotFinishException; 1024 gives sufficient headroom.
+# Judge max_tokens — 1024 gives enough headroom for RAGAS chain-of-thought
+# reasoning before outputting a score.
 JUDGE_MAX_TOKENS = 1024
 
 # Groq rate-limit settings
+# llama-3.3-70b-versatile: 12K TPM, 100K TPD
+# With 200-char context truncation each judge call is ~2-3K tokens.
+# 90s inter-sample delay keeps us safely under 12K TPM.
 INTER_REQUEST_DELAY_S      = 3.0
 RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
-RAGAS_INTER_SAMPLE_DELAY_S = 60
-MIN_TPD_REMAINING          = 50_000
-                                      # Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT)
+RAGAS_INTER_SAMPLE_DELAY_S = 90    # 90s gives TPM headroom for 70b-versatile (12K TPM)
+MIN_TPD_REMAINING          = 20_000
+                                   # Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT)
 
-# Context truncation for judge prompt — keeps total prompt within TPM limits
+# Context truncation for judge prompt — keeps each judge call well under 12K TPM
 JUDGE_CONTEXT_CHAR_LIMIT = 200
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -372,7 +374,7 @@ def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
       1. Retrieve top-5 chunks via FAISS
       2. Generate answer via Groq (full 600-char chunks)
       3. Pack into SingleTurnSample with truncated contexts for the judge
-         (200 chars/chunk keeps judge prompt within TPM limits)
+         (200 chars/chunk keeps judge prompt within 12K TPM limit)
     """
     print(f"\n[step 2] Generating answers for: {model_label}")
     samples = []
@@ -403,7 +405,7 @@ def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
 def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str) -> dict:
     print(f"\n[step 3] RAGAS evaluation: {model_label}")
     print(f"  metrics : faithfulness, answer_relevancy, context_precision")
-    print(f"  judge   : {GROQ_EVALUATOR_LLM} (Groq, 30K TPM, max_tokens={JUDGE_MAX_TOKENS})")
+    print(f"  judge   : {GROQ_EVALUATOR_LLM} (Groq, 12K TPM, max_tokens={JUDGE_MAX_TOKENS})")
     print(f"  mode    : sequential, {RAGAS_INTER_SAMPLE_DELAY_S}s delay between samples")
     print(f"  context : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (truncated for judge prompt)")
 
@@ -510,12 +512,13 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "---\n\n",
         "## Evaluation Setup\n\n",
         f"| Parameter | Value |\n|-----------|-------|\n",
-        f"| Judge LLM | `{GROQ_EVALUATOR_LLM}` (30K TPM, 500K TPD) |\n",
+        f"| Judge LLM | `{GROQ_EVALUATOR_LLM}` (12K TPM, 100K TPD) |\n",
         f"| Judge max_tokens | {JUDGE_MAX_TOKENS} |\n",
         f"| Answer max tokens | {MAX_ANSWER_TOKENS} |\n",
         f"| Temperature | 0.0 (deterministic) |\n",
         f"| Retrieval k | {TOP_K} |\n",
-        f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk |\n\n",
+        f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk |\n",
+        f"| Inter-sample delay | {RAGAS_INTER_SAMPLE_DELAY_S}s |\n\n",
         "---\n\n",
         "## Limitations\n\n",
         "- Groq proxy models differ from deployed vLLM models (see proxy note above)\n",
