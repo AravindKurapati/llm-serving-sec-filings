@@ -116,14 +116,20 @@ CORPUS_SAMPLE_SIZE  = 30
 MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
-# Groq rate-limit settings (free tier: 30 RPM, 6k TPM)
+# Groq rate-limit settings (free tier: 6K TPM, 500K TPD for 8b-instant)
 INTER_REQUEST_DELAY_S      = 3.0
 RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
-RAGAS_INTER_SAMPLE_DELAY_S = 60       # sleep between judge calls to avoid daily TPD exhaustion
+RAGAS_INTER_SAMPLE_DELAY_S = 60       # sleep between judge calls to spread TPM usage
 MIN_TPD_REMAINING          = 50_000   # abort if fewer than this many daily tokens remain
                                       # Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT)
+
+# Truncation limit for contexts passed to the RAGAS judge.
+# Groq free tier has 6K TPM. RAGAS builds a large prompt per metric call
+# (question + contexts + answer + instructions). Truncating each retrieved
+# chunk to 200 chars keeps the total judge prompt well under 6K tokens.
+JUDGE_CONTEXT_CHAR_LIMIT = 200
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 2: Groq LLM factory + retry wrapper
@@ -440,6 +446,12 @@ def build_evaluation_dataset(
       1. Retrieve top-5 chunks via local FAISS (matches finsight.py exactly)
       2. Generate answer via Groq
       3. Pack into SingleTurnSample for RAGAS v0.2
+
+    Context texts passed to the RAGAS judge are truncated to
+    JUDGE_CONTEXT_CHAR_LIMIT chars each. This keeps the total judge prompt
+    under Groq's 6K TPM limit for llama-3.1-8b-instant on the free tier.
+    Full contexts are still used for answer generation (build_prompt uses 600
+    chars per chunk) — only the judge-facing representation is truncated.
     """
     print(f"\n[step 2] Generating answers for: {model_label}")
     samples = []
@@ -451,7 +463,7 @@ def build_evaluation_dataset(
         print(f"  [{i+1:02d}/{len(pairs)}] {question[:70]}...")
 
         contexts      = retrieve(question, index, meta, embedder)
-        context_texts = [c["text"] for c in contexts]
+        context_texts = [c["text"][:JUDGE_CONTEXT_CHAR_LIMIT] for c in contexts]
         answer        = get_answer_via_groq(question, contexts, groq_model)
 
         samples.append(SingleTurnSample(
@@ -484,6 +496,7 @@ def run_ragas_evaluation(
     print(f"  metrics : faithfulness, answer_relevancy, context_precision")
     print(f"  judge   : {GROQ_EVALUATOR_LLM} (Groq)")
     print(f"  mode    : sequential, {RAGAS_INTER_SAMPLE_DELAY_S}s delay between samples")
+    print(f"  context truncation: {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk for judge prompt")
 
     evaluator_llm = make_groq_llm(GROQ_EVALUATOR_LLM, temperature=0.0, bypass_n=True)
     evaluator_emb = LangchainEmbeddingsWrapper(
@@ -618,6 +631,7 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         f"| Answer max tokens | {MAX_ANSWER_TOKENS} |\n",
         f"| Temperature | 0.0 (deterministic) |\n",
         f"| Retrieval k | {TOP_K} |\n",
+        f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk |\n",
         "\n",
         "---\n",
         "\n",
@@ -626,6 +640,7 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "- Groq proxy models differ from deployed vLLM models (see proxy note above)\n",
         f"- Only {len(testset)} Q+GT pairs — increase `TESTSET_SIZE` for statistical robustness\n",
         "- Testset is hand-written; real user queries may differ in distribution\n",
+        f"- Judge contexts truncated to {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk to stay within Groq 6K TPM limit\n",
         "- `context_precision` measures retrieval rank quality, not recall coverage\n",
     ]
 
