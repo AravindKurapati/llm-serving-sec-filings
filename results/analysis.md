@@ -63,13 +63,51 @@ Mistral output: 217 tokens, 6 clean bullet points, stops naturally
 
 ---
 
+## RAGAS Quality Evaluation
+
+> **Status**: Evaluation run pending — scores to be filled in after tonight's run (TPD resets midnight UTC).  
+> Full methodology: `scripts/ragas_eval.py` | Raw results: `results/ragas_eval_<timestamp>.json`
+
+**Setup**:
+- Metrics: faithfulness, answer_relevancy, context_precision
+- Judge LLM: Groq `llama-3.3-70b-versatile`
+- Testset: 10 hand-written Q+GT pairs (revenue, operating income, R&D spend, risk factors, segment performance across all 5 companies)
+- Retrieval: FAISS top-5 chunks, BGE-small-en-v1.5
+
+**Note on model proxies**: The Modal deployment runs `meta-llama/Meta-Llama-3.1-8B-Instruct` and `mistralai/Mistral-7B-Instruct-v0.3` via vLLM. RAGAS evaluation uses Groq API proxies to avoid Modal GPU costs — both currently map to `llama-3.1-8b-instant` (Mixtral was decommissioned on Groq). Scores reflect model-family quality, not bit-for-bit equivalence with the vLLM-served versions.
+
+| Metric | LLaMA 3.1 8B | Mistral 7B |
+|--------|:------------:|:----------:|
+| Faithfulness | — | — |
+| Answer Relevancy | — | — |
+| Context Precision | — | — |
+
+**Anticipated findings**:
+- Faithfulness: given LLaMA's citation-repetition artifact, lower faithfulness is plausible — the model may be hallucinating in the repetition tail
+- Context Precision: retriever-dependent metric, so both models should score identically since they share the same FAISS index
+- Answer Relevancy: Mistral's concise outputs may score higher since they stay on-topic rather than padding to the token limit
+
+---
+
+## Context Length Sensitivity
+
+> **Status**: Script ready — `scripts/context_sensitivity_test.py`. Run when TPD resets.
+
+Varies retrieval k across [2, 3, 5, 8, 10] and measures prompt token count, Groq latency, and answer word count per k value.
+
+**Expected finding**: prompt token count grows roughly linearly with k (each chunk truncated to 600 chars ≈ ~150 tokens). Answer length is expected to plateau around k=5 — additional context beyond the current default adds latency without meaningfully improving answer completeness.
+
+This test directly informs the k=5 default used throughout the project and quantifies the latency cost of retrieval breadth.
+
+---
+
 ## Implications for RAG Applications
 
 For financial document Q&A where answers should be concise and grounded:
 
-- **Mistral is the better choice** cause faster TTFT and cleaner outputs
+- **Mistral is the better choice** — faster TTFT and cleaner outputs
 - **LLaMA may be better** for tasks requiring longer, more exhaustive answers with higher token budgets
-- **Throughput is not the differentiator** at this scale - both models are memory-bandwidth bound
+- **Throughput is not the differentiator** at this scale — both models are memory-bandwidth bound
 
 For latency-sensitive applications (real-time chat, streaming):
 - Mistral's 1,015ms p50 TTFT is within acceptable range for interactive use
@@ -81,5 +119,5 @@ For latency-sensitive applications (real-time chat, streaming):
 
 - TTFT measurement is estimated (batch `generate()` doesn't expose streaming token times)
 - Only 5 questions — not statistically robust
-- No evaluation of answer factual accuracy (RAGAS evaluation pending)
+- RAGAS proxy models differ from vLLM-served models (see caveat above — Mistral proxy is a different model family)
 - Single-request benchmarking — concurrent request behavior not measured
