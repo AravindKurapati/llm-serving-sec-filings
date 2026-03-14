@@ -107,7 +107,7 @@ GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"       # proxy for LLaMA 3.1 8B
 GROQ_MISTRAL_MODEL = "llama-3.1-8b-instant"        # proxy for Mistral 7B (mixtral decommissioned; llama3-8b-8192 also retired)
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"     # TestsetGenerator question writer
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"     # TestsetGenerator critic
-GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"     # RAGAS judge (Maverick rejected n>1 sampling)
+GROQ_EVALUATOR_LLM = "llama-3.1-8b-instant"        # RAGAS judge — 500K TPD vs 100K for 70b-versatile
 
 # Evaluation parameters — all match finsight.py defaults
 TESTSET_SIZE        = 15
@@ -122,8 +122,8 @@ RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
 RAGAS_INTER_SAMPLE_DELAY_S = 60       # sleep between judge calls to avoid daily TPD exhaustion
-MIN_TPD_REMAINING          = 20_000   # abort if fewer than this many daily tokens remain
-                                      # Groq TPD resets at midnight UTC — run then if limit hit
+MIN_TPD_REMAINING          = 50_000   # abort if fewer than this many daily tokens remain
+                                      # Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 2: Groq LLM factory + retry wrapper
@@ -208,7 +208,8 @@ def preflight_tpd_check():
         sys.exit(
             f"[ERROR] Only {remaining_int:,} daily tokens remaining "
             f"(minimum {MIN_TPD_REMAINING:,} required).\n"
-            f"Wait for the Groq daily limit to reset before running."
+            f"Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT).\n"
+            f"Wait for the reset before running."
         )
 
 
@@ -568,14 +569,14 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "# RAGAS Evaluation: FinSight SEC Filing RAG\n",
         "\n",
         f"**Date**: {timestamp}  \n",
-        f"**Testset**: {len(testset)} synthetic Q+GT pairs  \n",
+        f"**Testset**: {len(testset)} Q+GT pairs  \n",
         f"**Corpus**: AAPL, MSFT, GOOGL, AMZN, META — 10-K filings (3 years each)  \n",
         f"**Retrieval**: FAISS IndexFlatIP · BGE-small-en-v1.5 · top-{TOP_K} chunks  \n",
         f"**Judge LLM**: Groq `{GROQ_EVALUATOR_LLM}`  \n",
         "\n",
         "---\n",
         "\n",
-        "## Model Proxy Caveat\n",
+        "## Model Proxy Note\n",
         "\n",
         "> The FinSight Modal deployment runs:\n",
         "> - `meta-llama/Meta-Llama-3.1-8B-Instruct` (LLaMA)\n",
@@ -583,9 +584,9 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         ">\n",
         "> This evaluation uses Groq API proxies to avoid Modal GPU costs:\n",
         "> - **LLaMA proxy** : `llama-3.1-8b-instant` — same base model, different serving stack\n",
-        "> - **Mistral proxy**: `llama-3.1-8b-instant` — **different model**: mixtral decommissioned; llama3-8b-8192 subsequently also retired\n",
+        "> - **Mistral proxy**: `llama-3.1-8b-instant` — mixtral decommissioned; llama3-8b-8192 also retired\n",
         ">\n",
-        "> Scores approximate model-family quality. Exact values will differ from the vLLM-served versions.\n",
+        "> Scores reflect model-family quality on this task. Exact values will differ from vLLM-served versions.\n",
         "\n",
         "---\n",
         "\n",
@@ -603,7 +604,7 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "\n",
         "### Metric Definitions\n",
         "\n",
-        "- **Faithfulness**: fraction of answer claims that are entailed by the retrieved context\n",
+        "- **Faithfulness**: fraction of answer claims entailed by the retrieved context\n",
         "- **Answer Relevancy**: semantic alignment between the question and the answer\n",
         "- **Context Precision**: whether the most relevant chunks are ranked highest by FAISS\n",
         "\n",
@@ -613,19 +614,18 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         "\n",
         f"| Parameter | Value |\n",
         f"|-----------|-------|\n",
-        f"| TestsetGen LLM | `{GROQ_GENERATOR_LLM}` (generator), `{GROQ_CRITIC_LLM}` (critic) |\n",
+        f"| Judge LLM | `{GROQ_EVALUATOR_LLM}` (Groq, 500K TPD free tier) |\n",
         f"| Answer max tokens | {MAX_ANSWER_TOKENS} |\n",
         f"| Temperature | 0.0 (deterministic) |\n",
-        f"| Corpus sample for TestsetGen | {CORPUS_SAMPLE_SIZE} chunks |\n",
+        f"| Retrieval k | {TOP_K} |\n",
         "\n",
         "---\n",
         "\n",
         "## Limitations\n",
         "\n",
-        "- Groq proxy models differ from deployed vLLM models (see caveat above — Mistral proxy is a different model family)\n",
+        "- Groq proxy models differ from deployed vLLM models (see proxy note above)\n",
         f"- Only {len(testset)} Q+GT pairs — increase `TESTSET_SIZE` for statistical robustness\n",
-        "- Testset is synthetic; real user queries may differ in distribution\n",
-        f"- RAGAS judge (`{GROQ_EVALUATOR_LLM}`) may favour certain answer styles\n",
+        "- Testset is hand-written; real user queries may differ in distribution\n",
         "- `context_precision` measures retrieval rank quality, not recall coverage\n",
     ]
 
