@@ -7,6 +7,17 @@ Evaluates LLaMA 3.1 8B and Mistral 7B on three RAGAS quality metrics:
   - answer_relevancy   : does the answer address the question?
   - context_precision  : do the most relevant chunks rank highest in retrieval?
 
+RUN
+---
+  # Score one model at a time to stay within 100K TPD on Groq free tier:
+  python scripts/ragas_eval.py --model llama   --eval-questions 3  # Day 1
+  python scripts/ragas_eval.py --model mistral --eval-questions 3  # Day 2 after reset
+
+  # Score both models (may exhaust TPD):
+  python scripts/ragas_eval.py --model both --eval-questions 3
+
+  # Use synthetic testset:
+  python scripts/ragas_eval.py --model llama --generate
 """
 
 import argparse
@@ -18,7 +29,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import faiss
 import numpy as np
@@ -30,7 +40,7 @@ load_dotenv()
 try:
     from groq import RateLimitError as GroqRateLimitError
 except ImportError:
-    GroqRateLimitError = Exception  # fallback for older SDK versions
+    GroqRateLimitError = Exception
 
 from langchain_groq import ChatGroq
 from langchain_core.documents import Document
@@ -58,7 +68,7 @@ GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"
 GROQ_MISTRAL_MODEL = "llama-3.1-8b-instant"
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"
-GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"  
+GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"  # 12K TPM, 100K TPD
 
 # Evaluation parameters
 TESTSET_SIZE        = 15
@@ -67,28 +77,25 @@ CORPUS_SAMPLE_SIZE  = 30
 MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
-
-DEFAULT_EVAL_QUESTIONS = 5
+# Default number of questions scored per model.
+# 3 questions x ~30K tokens/question = ~90K tokens — fits in 100K TPD with headroom.
+DEFAULT_EVAL_QUESTIONS = 3
 
 JUDGE_MAX_TOKENS = 1024
 
-# Groq rate-limit settings
-# llama-3.3-70b-versatile: 12K TPM, 100K TPD
+# Groq rate-limit settings — llama-3.3-70b-versatile: 12K TPM, 100K TPD
 INTER_REQUEST_DELAY_S      = 3.0
 RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
-RAGAS_INTER_SAMPLE_DELAY_S = 90
+RAGAS_INTER_SAMPLE_DELAY_S = 90   # 90s between samples keeps well under 12K TPM
 MIN_TPD_REMAINING          = 20_000
 
-# Context truncation for judge prompt
 JUDGE_CONTEXT_CHAR_LIMIT = 200
 
 
 def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512,
                   bypass_n: bool = False) -> LangchainLLMWrapper:
-    """Create a RAGAS compatible LangChain wrapped Groq LLM with built in retry.
-    """
     llm = ChatGroq(
         model=model_name,
         temperature=temperature,
@@ -123,7 +130,6 @@ def groq_call_with_retry(fn, *args, **kwargs):
 def preflight_tpd_check():
     from groq import Groq
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
-
     raw = client.chat.completions.with_raw_response.create(
         model=GROQ_EVALUATOR_LLM,
         messages=[{"role": "user", "content": "hi"}],
@@ -132,32 +138,25 @@ def preflight_tpd_check():
     headers   = raw.headers
     remaining = headers.get("x-ratelimit-remaining-tokens-day")
     limit     = headers.get("x-ratelimit-limit-tokens-day")
-
     remaining_int = int(remaining) if remaining else None
     limit_int     = int(limit) if limit else None
 
     if remaining_int is not None and limit_int is not None:
         print(f"[preflight] TPD remaining: {remaining_int:,} / {limit_int:,}")
+        if remaining_int < MIN_TPD_REMAINING:
+            sys.exit(
+                f"[ERROR] Only {remaining_int:,} daily tokens remaining "
+                f"(minimum {MIN_TPD_REMAINING:,} required).\n"
+                f"Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT)."
+            )
     else:
-        print(f"[preflight] TPD headers not returned — skipping budget check")
-        print(f"  raw headers: remaining={remaining!r}, limit={limit!r}")
-        return
-
-    if remaining_int < MIN_TPD_REMAINING:
-        sys.exit(
-            f"[ERROR] Only {remaining_int:,} daily tokens remaining "
-            f"(minimum {MIN_TPD_REMAINING:,} required).\n"
-            f"Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT).\n"
-            f"Wait for the reset before running."
-        )
-
+        print(f"[preflight] TPD headers not returned — check console.groq.com/usage manually")
 
 
 def load_index():
     if not INDEX_PATH.exists() or not META_PATH.exists():
         sys.exit(
             f"\n[ERROR] Index files not found. Download them first:\n\n"
-            f"  mkdir -p {INDEX_DIR}\n"
             f"  modal volume get finsight-data /data/chunks.faiss {INDEX_PATH}\n"
             f"  modal volume get finsight-data /data/meta.npy    {META_PATH}\n"
         )
@@ -182,14 +181,12 @@ def retrieve(question: str, index, meta: list, embedder: SentenceTransformer,
     return [meta[i] for i in ids[0]]
 
 
-
 def build_langchain_docs(meta: list[dict], sample_size: int = CORPUS_SAMPLE_SIZE) -> list[Document]:
     def _is_prose(chunk: dict) -> bool:
         t = chunk.get("text", "")
         return not (t.startswith("<?xml") or "<" in t or "auth_ref" in t or "xbrl" in t.lower())
 
     meta = [c for c in meta if _is_prose(c)]
-
     by_company: dict[str, list[dict]] = {}
     for chunk in meta:
         src     = chunk.get("src", chunk.get("source", "unknown"))
@@ -198,7 +195,6 @@ def build_langchain_docs(meta: list[dict], sample_size: int = CORPUS_SAMPLE_SIZE
 
     companies   = list(by_company.keys())
     per_company = max(1, sample_size // len(companies))
-
     sampled = []
     for company, chunks in by_company.items():
         by_src: dict[str, list[dict]] = {}
@@ -211,7 +207,6 @@ def build_langchain_docs(meta: list[dict], sample_size: int = CORPUS_SAMPLE_SIZE
 
     random.shuffle(sampled)
     sampled = sampled[:sample_size]
-
     docs = []
     for chunk in sampled:
         src     = chunk.get("src", chunk.get("source", "unknown"))
@@ -220,24 +215,17 @@ def build_langchain_docs(meta: list[dict], sample_size: int = CORPUS_SAMPLE_SIZE
             page_content=chunk["text"][:500],
             metadata={"source": src, "company": company, "doc_id": chunk.get("doc_id", "")},
         ))
-
-    print(f"[ok] Prepared {len(docs)} corpus documents for TestsetGenerator "
-          f"({len(companies)} companies)")
+    print(f"[ok] Prepared {len(docs)} corpus documents ({len(companies)} companies)")
     return docs
-
-
 
 
 def generate_testset(docs: list[Document]) -> list[dict]:
     print(f"\n[step 1] Generating testset ({TESTSET_SIZE} Q+GT pairs) ...")
-    print("  This may take 5-10 minutes due to Groq rate limits.")
-
     ragas_embedder = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=EMBED_MODEL))
     generator = TestsetGenerator(
         llm=make_groq_llm(GROQ_GENERATOR_LLM, temperature=0.4),
         embedding_model=ragas_embedder,
     )
-
     if hasattr(generator, "generate_with_langchain_docs"):
         testset = generator.generate_with_langchain_docs(docs, testset_size=TESTSET_SIZE)
     else:
@@ -252,17 +240,12 @@ def generate_testset(docs: list[Document]) -> list[dict]:
             continue
         pairs.append({"question": question, "ground_truth": ground_truth})
 
-    if len(pairs) < 5:
-        print(f"  [warn] TestsetGenerator only produced {len(pairs)} pairs. Proceeding.")
-    else:
-        print(f"[ok] Generated {len(pairs)} Q+GT pairs")
-
+    print(f"[ok] Generated {len(pairs)} Q+GT pairs")
     cache_path = RESULTS_DIR / "ragas_testset.json"
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(pairs, f, indent=2)
     print(f"[ok] Testset cached to {cache_path}")
     return pairs
-
 
 
 def build_prompt(question: str, contexts: list[dict]) -> str:
@@ -294,54 +277,34 @@ def get_answer_via_groq(question: str, contexts: list[dict], groq_model: str) ->
     return groq_call_with_retry(_call)
 
 
-
-
 def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
                               embedder: SentenceTransformer, model_label: str,
                               groq_model: str) -> EvaluationDataset:
-    """
-    For each Q+GT pair:
-      1. Retrieve top-5 chunks via FAISS
-      2. Generate answer via Groq (full 600-char chunks)
-      3. Pack into SingleTurnSample with truncated contexts for the judge
-         (200 chars/chunk keeps judge prompt within 12K TPM limit)
-    """
     print(f"\n[step 2] Generating answers for: {model_label}")
     samples = []
-
     for i, pair in enumerate(pairs):
         question     = pair["question"]
         ground_truth = pair["ground_truth"]
         print(f"  [{i+1:02d}/{len(pairs)}] {question[:70]}...")
-
         contexts      = retrieve(question, index, meta, embedder)
         context_texts = [c["text"][:JUDGE_CONTEXT_CHAR_LIMIT] for c in contexts]
         answer        = get_answer_via_groq(question, contexts, groq_model)
-
         samples.append(SingleTurnSample(
             user_input=question,
             retrieved_contexts=context_texts,
             response=answer,
             reference=ground_truth,
         ))
-
     return EvaluationDataset(samples=samples)
-
 
 
 def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
                          eval_questions: int = DEFAULT_EVAL_QUESTIONS) -> dict:
-    """
-    Score up to eval_questions samples through the RAGAS judge.
-    Remaining samples in the dataset are skipped to stay within TPD budget.
-    """
     samples_to_score = dataset.samples[:eval_questions]
-
     print(f"\n[step 3] RAGAS evaluation: {model_label}")
     print(f"  metrics  : faithfulness, answer_relevancy, context_precision")
-    print(f"  judge    : {GROQ_EVALUATOR_LLM} (Groq, 12K TPM, max_tokens={JUDGE_MAX_TOKENS})")
-    print(f"  scoring  : {len(samples_to_score)}/{len(dataset.samples)} samples "
-          f"(use --eval-questions to change)")
+    print(f"  judge    : {GROQ_EVALUATOR_LLM} (12K TPM, max_tokens={JUDGE_MAX_TOKENS})")
+    print(f"  scoring  : {len(samples_to_score)}/{len(dataset.samples)} samples")
     print(f"  throttle : {RAGAS_INTER_SAMPLE_DELAY_S}s between samples")
     print(f"  context  : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (truncated for judge)")
 
@@ -390,9 +353,7 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     return scores
 
 
-
-def save_results_json(all_results: dict, testset: list[dict],
-                      eval_questions: int) -> Path:
+def save_results_json(all_results: dict, testset: list[dict], eval_questions: int) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     payload = {
         "timestamp":      timestamp,
@@ -409,8 +370,7 @@ def save_results_json(all_results: dict, testset: list[dict],
     return path
 
 
-def write_markdown_report(all_results: dict, testset: list[dict],
-                          eval_questions: int) -> Path:
+def write_markdown_report(all_results: dict, testset: list[dict], eval_questions: int) -> Path:
     timestamp      = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
     metrics        = ["faithfulness", "answer_relevancy", "context_precision"]
     llama_scores   = all_results.get("llama",   {}).get("scores", {})
@@ -422,7 +382,7 @@ def write_markdown_report(all_results: dict, testset: list[dict],
     lines = [
         "# RAGAS Evaluation: FinSight SEC Filing RAG\n\n",
         f"**Date**: {timestamp}  \n",
-        f"**Testset**: {len(testset)} Q+GT pairs ({eval_questions} scored)  \n",
+        f"**Testset**: {len(testset)} Q+GT pairs ({eval_questions} scored per model)  \n",
         f"**Corpus**: AAPL, MSFT, GOOGL, AMZN, META — 10-K filings (3 years each)  \n",
         f"**Retrieval**: FAISS IndexFlatIP · BGE-small-en-v1.5 · top-{TOP_K} chunks  \n",
         f"**Judge LLM**: Groq `{GROQ_EVALUATOR_LLM}` (max_tokens={JUDGE_MAX_TOKENS})  \n\n",
@@ -455,11 +415,12 @@ def write_markdown_report(all_results: dict, testset: list[dict],
         f"| Retrieval k | {TOP_K} |\n",
         f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk |\n",
         f"| Inter-sample delay | {RAGAS_INTER_SAMPLE_DELAY_S}s |\n",
-        f"| Samples scored | {eval_questions} of {len(testset)} |\n\n",
+        f"| Samples scored per model | {eval_questions} of {len(testset)} |\n\n",
         "---\n\n",
         "## Limitations\n\n",
         "- Groq proxy models differ from deployed vLLM models (see proxy note above)\n",
         f"- Only {eval_questions} of {len(testset)} Q+GT pairs scored — limited by Groq free-tier TPD\n",
+        "- LLaMA and Mistral scored on separate days due to 100K TPD constraint\n",
         "- Testset is hand-written; real user queries may differ in distribution\n",
         f"- Judge contexts truncated to {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk to fit within TPM limits\n",
         "- `context_precision` measures retrieval rank quality, not recall coverage\n",
@@ -472,20 +433,22 @@ def write_markdown_report(all_results: dict, testset: list[dict],
     return report_path
 
 
-
 def main():
     parser = argparse.ArgumentParser(description="FinSight RAGAS Evaluation")
     parser.add_argument("--generate", action="store_true",
                         help="Generate synthetic testset (default: load data/testset.json)")
     parser.add_argument("--eval-questions", type=int, default=DEFAULT_EVAL_QUESTIONS,
-                        help=f"Number of questions to score through the RAGAS judge "
-                             f"(default: {DEFAULT_EVAL_QUESTIONS}). Lower = fewer tokens used.")
+                        help=f"Questions to score per model (default: {DEFAULT_EVAL_QUESTIONS})")
+    parser.add_argument("--model", choices=["llama", "mistral", "both"], default="both",
+                        help="Which model to evaluate (default: both). "
+                             "Use 'llama' or 'mistral' to run one per day and stay within TPD.")
     args = parser.parse_args()
 
     print("=" * 65)
     print("FinSight RAGAS Evaluation")
     print("=" * 65)
-    print(f"  eval-questions: {args.eval_questions} (scoring first {args.eval_questions} samples)")
+    print(f"  model:          {args.model}")
+    print(f"  eval-questions: {args.eval_questions} per model")
 
     if not os.getenv("GROQ_API_KEY"):
         sys.exit("[ERROR] GROQ_API_KEY is not set. Add to .env: GROQ_API_KEY=gsk_...\n")
@@ -515,13 +478,19 @@ def main():
 
     eval_questions = min(args.eval_questions, len(testset))
 
-    models_config = [
+    all_models = [
         {"key": "llama",   "label": "LLaMA 3.1 8B  (Groq: llama-3.1-8b-instant)", "groq_model": GROQ_LLAMA_MODEL},
         {"key": "mistral", "label": "Mistral proxy  (Groq: llama-3.1-8b-instant)", "groq_model": GROQ_MISTRAL_MODEL},
     ]
 
+    # Filter to selected model(s)
+    if args.model == "both":
+        models_to_run = all_models
+    else:
+        models_to_run = [m for m in all_models if m["key"] == args.model]
+
     all_results: dict = {}
-    for cfg in models_config:
+    for cfg in models_to_run:
         dataset = build_evaluation_dataset(
             pairs=testset, index=index, meta=meta, embedder=embedder,
             model_label=cfg["label"], groq_model=cfg["groq_model"],
@@ -539,14 +508,25 @@ def main():
     print("\n" + "=" * 65)
     print("RAGAS Evaluation Complete")
     print("=" * 65)
-    print(f"{'Metric':<25} {'LLaMA 3.1 8B':>15} {'Mistral proxy':>15}")
-    print("-" * 55)
-    for m in metrics:
-        l_val  = all_results["llama"]["scores"].get(m)
-        mi_val = all_results["mistral"]["scores"].get(m)
-        l_str  = f"{l_val:.4f}"  if isinstance(l_val,  float) else "N/A"
-        mi_str = f"{mi_val:.4f}" if isinstance(mi_val, float) else "N/A"
-        print(f"{m:<25} {l_str:>15} {mi_str:>15}")
+
+    if args.model == "both":
+        print(f"{'Metric':<25} {'LLaMA 3.1 8B':>15} {'Mistral proxy':>15}")
+        print("-" * 55)
+        for m in metrics:
+            l_val  = all_results.get("llama",   {}).get("scores", {}).get(m)
+            mi_val = all_results.get("mistral", {}).get("scores", {}).get(m)
+            l_str  = f"{l_val:.4f}"  if isinstance(l_val,  float) else "N/A"
+            mi_str = f"{mi_val:.4f}" if isinstance(mi_val, float) else "N/A"
+            print(f"{m:<25} {l_str:>15} {mi_str:>15}")
+    else:
+        model_key = args.model
+        print(f"{'Metric':<25} {all_results[model_key]['label'][:20]:>20}")
+        print("-" * 47)
+        for m in metrics:
+            val = all_results[model_key]["scores"].get(m)
+            val_str = f"{val:.4f}" if isinstance(val, float) else "N/A"
+            print(f"{m:<25} {val_str:>20}")
+
     print()
     print(f"Full report : results/ragas_eval.md")
     print(f"Raw JSON    : results/ragas_eval_<timestamp>.json")
