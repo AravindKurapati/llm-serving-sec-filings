@@ -7,51 +7,6 @@ Evaluates LLaMA 3.1 8B and Mistral 7B on three RAGAS quality metrics:
   - answer_relevancy   : does the answer address the question?
   - context_precision  : do the most relevant chunks rank highest in retrieval?
 
-MODEL PROXY CAVEAT
-------------------
-The FinSight vLLM deployment on Modal runs:
-  - meta-llama/Meta-Llama-3.1-8B-Instruct  ("llama")
-  - mistralai/Mistral-7B-Instruct-v0.3      ("mistral")
-
-This evaluation uses Groq API proxies (no Modal GPU required):
-  - LLaMA  proxy : groq/llama-3.1-8b-instant   (same base model, different serving)
-  - Mistral proxy: groq/llama-3.1-8b-instant    (DIFFERENT MODEL: mixtral decommissioned;
-                                                  llama3-8b-8192 subsequently also retired)
-
-Scores are indicative of model family quality, not bit-for-bit equivalence
-with the vLLM-served versions.
-
-PREREQUISITES
--------------
-1. Download FAISS index from Modal Volume (one-time, ~10 MB):
-
-   mkdir -p data/index
-   modal volume get finsight-data /data/chunks.faiss data/index/chunks.faiss
-   modal volume get finsight-data /data/meta.npy    data/index/meta.npy
-
-2. Set GROQ_API_KEY in your .env file or environment:
-
-   GROQ_API_KEY=gsk_...
-
-3. Install dependencies:
-
-   pip install -r requirements.txt
-
-RUN
----
-   python scripts/ragas_eval.py                    # score first 5 questions (default)
-   python scripts/ragas_eval.py --eval-questions 3 # score only 3 questions (safest)
-   python scripts/ragas_eval.py --eval-questions 10 # score all 10
-   python scripts/ragas_eval.py --generate          # synthetic testset via TestsetGenerator
-
---eval-questions controls how many samples go through the RAGAS judge.
-Answer generation always runs on all testset questions.
-Default is 5 to stay well within Groq's 100K TPD for llama-3.3-70b-versatile.
-
-Budget estimate at default (5 questions x 2 models):
-  ~5K tokens/sample x 5 samples x 2 models = ~50K tokens — fits in 100K TPD.
-
-Expected runtime: ~15 minutes at default (5 samples x 90s throttle x 2 models).
 """
 
 import argparse
@@ -72,7 +27,6 @@ from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
-# ── Groq / LangChain imports ──────────────────────────────────────────────────
 try:
     from groq import RateLimitError as GroqRateLimitError
 except ImportError:
@@ -82,7 +36,6 @@ from langchain_groq import ChatGroq
 from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-# ── RAGAS v0.2 imports ────────────────────────────────────────────────────────
 from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
 from ragas.run_config import RunConfig
@@ -91,9 +44,6 @@ from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.testset import TestsetGenerator
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 1: Constants
-# ─────────────────────────────────────────────────────────────────────────────
 
 ROOT               = Path(__file__).parent.parent
 INDEX_DIR          = ROOT / "data" / "index"
@@ -108,7 +58,7 @@ GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"
 GROQ_MISTRAL_MODEL = "llama-3.1-8b-instant"
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"
-GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"  # 12K TPM, 100K TPD — confirmed working with bypass_n=True
+GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"  
 
 # Evaluation parameters
 TESTSET_SIZE        = 15
@@ -117,38 +67,27 @@ CORPUS_SAMPLE_SIZE  = 30
 MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
-# Default number of questions to score through the RAGAS judge.
-# Lower = fewer tokens = safer on Groq free tier.
-# Override with --eval-questions N at the command line.
+
 DEFAULT_EVAL_QUESTIONS = 5
 
-# Judge max_tokens — 1024 gives enough headroom for RAGAS chain-of-thought
 JUDGE_MAX_TOKENS = 1024
 
 # Groq rate-limit settings
 # llama-3.3-70b-versatile: 12K TPM, 100K TPD
-# 90s inter-sample delay keeps comfortably under 12K TPM.
 INTER_REQUEST_DELAY_S      = 3.0
 RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
 RAGAS_INTER_SAMPLE_DELAY_S = 90
 MIN_TPD_REMAINING          = 20_000
-                                   # Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT)
 
 # Context truncation for judge prompt
 JUDGE_CONTEXT_CHAR_LIMIT = 200
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 2: Groq LLM factory + retry wrapper
-# ─────────────────────────────────────────────────────────────────────────────
 
 def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512,
                   bypass_n: bool = False) -> LangchainLLMWrapper:
-    """Create a RAGAS-compatible LangChain-wrapped Groq LLM with built-in retry.
-
-    bypass_n=True: fans out n>1 requests as separate single-completion calls.
-    Required for Groq models that reject n>1 sampling.
+    """Create a RAGAS compatible LangChain wrapped Groq LLM with built in retry.
     """
     llm = ChatGroq(
         model=model_name,
@@ -213,9 +152,6 @@ def preflight_tpd_check():
         )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 3: FAISS index loading + local retrieval
-# ─────────────────────────────────────────────────────────────────────────────
 
 def load_index():
     if not INDEX_PATH.exists() or not META_PATH.exists():
@@ -246,9 +182,6 @@ def retrieve(question: str, index, meta: list, embedder: SentenceTransformer,
     return [meta[i] for i in ids[0]]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 4: Corpus preparation for TestsetGenerator
-# ─────────────────────────────────────────────────────────────────────────────
 
 def build_langchain_docs(meta: list[dict], sample_size: int = CORPUS_SAMPLE_SIZE) -> list[Document]:
     def _is_prose(chunk: dict) -> bool:
@@ -293,9 +226,7 @@ def build_langchain_docs(meta: list[dict], sample_size: int = CORPUS_SAMPLE_SIZE
     return docs
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 5: TestsetGenerator
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def generate_testset(docs: list[Document]) -> list[dict]:
     print(f"\n[step 1] Generating testset ({TESTSET_SIZE} Q+GT pairs) ...")
@@ -333,9 +264,6 @@ def generate_testset(docs: list[Document]) -> list[dict]:
     return pairs
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 6: Answer generation via Groq
-# ─────────────────────────────────────────────────────────────────────────────
 
 def build_prompt(question: str, contexts: list[dict]) -> str:
     formatted = "\n\n".join(
@@ -366,9 +294,7 @@ def get_answer_via_groq(question: str, contexts: list[dict], groq_model: str) ->
     return groq_call_with_retry(_call)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 7: Build EvaluationDataset
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
                               embedder: SentenceTransformer, model_label: str,
@@ -402,9 +328,6 @@ def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
     return EvaluationDataset(samples=samples)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 8: RAGAS evaluation
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
                          eval_questions: int = DEFAULT_EVAL_QUESTIONS) -> dict:
@@ -460,16 +383,13 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
         if vals:
             scores[m] = round(sum(vals) / len(vals), 4)
         else:
-            print(f"  [warn] {m} returned NaN for all samples — setting to null")
+            print(f"  [warn] {m} returned NaN for all samples - setting to null")
             scores[m] = None
 
     print(f"  scores: {scores}")
     return scores
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 9: Report writers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def save_results_json(all_results: dict, testset: list[dict],
                       eval_questions: int) -> Path:
@@ -552,9 +472,6 @@ def write_markdown_report(all_results: dict, testset: list[dict],
     return report_path
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 10: Main orchestrator
-# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="FinSight RAGAS Evaluation")

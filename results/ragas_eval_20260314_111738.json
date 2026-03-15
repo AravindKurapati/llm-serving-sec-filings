@@ -1,0 +1,81 @@
+{
+  "timestamp": "20260314_111738",
+  "testset_size": 10,
+  "retrieval": {
+    "index": "FAISS IndexFlatIP",
+    "k": 5,
+    "embed_model": "BAAI/bge-small-en-v1.5"
+  },
+  "models": {
+    "llama": {
+      "label": "LLaMA 3.1 8B  (Groq: llama-3.1-8b-instant)",
+      "groq_model": "llama-3.1-8b-instant",
+      "scores": {
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null
+      }
+    },
+    "mistral": {
+      "label": "Mistral proxy  (Groq: llama-3.1-8b-instant)",
+      "groq_model": "llama-3.1-8b-instant",
+      "scores": {
+        "faithfulness": null,
+        "answer_relevancy": null,
+        "context_precision": null
+      }
+    }
+  },
+  "testset": [
+    {
+      "question": "What was Apple's total net revenue in its most recent fiscal year, and which product category was the largest contributor?",
+      "ground_truth": "Apple's total net revenue was approximately $383 billion in fiscal 2023, with iPhone being the largest revenue segment, followed by Services.",
+      "contexts": []
+    },
+    {
+      "question": "How did Microsoft's operating income change year-over-year, and which business segment contributed most to that growth?",
+      "ground_truth": "Microsoft's operating income grew significantly year-over-year, driven primarily by the Intelligent Cloud segment, which includes Azure cloud services.",
+      "contexts": []
+    },
+    {
+      "question": "What was Alphabet's research and development expenditure, and what technology areas did it prioritize?",
+      "ground_truth": "Alphabet spent tens of billions on research and development, with major investments in artificial intelligence, Google Cloud infrastructure, and Other Bets initiatives.",
+      "contexts": []
+    },
+    {
+      "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its operating margin compared to the retail segments?",
+      "ground_truth": "AWS generated the majority of Amazon's operating income despite representing a smaller share of total revenue, operating at a significantly higher margin than the North America and International retail segments.",
+      "contexts": []
+    },
+    {
+      "question": "What were Meta Platforms' primary sources of revenue, and how did advertising revenue trend after the 2022 decline?",
+      "ground_truth": "Meta's revenue is derived almost entirely from advertising across its Family of Apps, including Facebook and Instagram. Advertising revenue recovered and grew after declining in 2022.",
+      "contexts": []
+    },
+    {
+      "question": "What key supply chain and international operation risks does Apple identify in its SEC filings?",
+      "ground_truth": "Apple identifies risks including reliance on single-source suppliers, geopolitical tensions affecting manufacturing in Asia, foreign exchange fluctuations, and regulatory scrutiny in international markets.",
+      "contexts": []
+    },
+    {
+      "question": "How much did Microsoft invest in research and development, and what were its key technology focus areas?",
+      "ground_truth": "Microsoft invested heavily in research and development, with significant focus on artificial intelligence integration across its product portfolio, cloud computing, and developer tools.",
+      "contexts": []
+    },
+    {
+      "question": "How did Google Services and Google Cloud each contribute to Alphabet's operating results?",
+      "ground_truth": "Google Services, which includes Search and YouTube advertising, generated the vast majority of Alphabet's revenue and operating income. Google Cloud grew rapidly but operated at a lower margin than Google Services.",
+      "contexts": []
+    },
+    {
+      "question": "What regulatory and competitive risks does Amazon highlight in its SEC filings?",
+      "ground_truth": "Amazon highlights risks including antitrust scrutiny, labor regulations, data privacy laws, intense competition across its retail and cloud businesses, and cybersecurity threats.",
+      "contexts": []
+    },
+    {
+      "question": "What was Meta's operating income and how did Reality Labs losses affect its overall financial results?",
+      "ground_truth": "Meta's overall operating income was driven by the Family of Apps segment, while Reality Labs reported multi-billion dollar operating losses annually due to heavy investment in virtual and augmented reality development.",
+      "contexts": []
+    }
+  ]
+}
