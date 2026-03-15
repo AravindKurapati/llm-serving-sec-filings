@@ -39,18 +39,19 @@ PREREQUISITES
 
 RUN
 ---
-   python scripts/ragas_eval.py                # uses data/testset.json (default)
-   python scripts/ragas_eval.py --generate     # synthetic testset via TestsetGenerator
+   python scripts/ragas_eval.py                    # score first 5 questions (default)
+   python scripts/ragas_eval.py --eval-questions 3 # score only 3 questions (safest)
+   python scripts/ragas_eval.py --eval-questions 10 # score all 10
+   python scripts/ragas_eval.py --generate          # synthetic testset via TestsetGenerator
 
-The bundled testset (data/testset.json) contains 10 hand-written Q+GT pairs
-covering revenue, operating income, R&D spend, risk factors, and segment
-performance for all five companies and is used by default.
+--eval-questions controls how many samples go through the RAGAS judge.
+Answer generation always runs on all testset questions.
+Default is 5 to stay well within Groq's 100K TPD for llama-3.3-70b-versatile.
 
-Pass --generate to fall back to the TestsetGenerator pipeline.  The synthetic
-testset is cached to results/ragas_testset.json after the first run; delete
-that file to force regeneration.
+Budget estimate at default (5 questions x 2 models):
+  ~5K tokens/sample x 5 samples x 2 models = ~50K tokens — fits in 100K TPD.
 
-Expected runtime: ~30 minutes (10 samples x 90s throttle x 2 models).
+Expected runtime: ~15 minutes at default (5 samples x 90s throttle x 2 models).
 """
 
 import argparse
@@ -107,7 +108,7 @@ GROQ_LLAMA_MODEL   = "llama-3.1-8b-instant"
 GROQ_MISTRAL_MODEL = "llama-3.1-8b-instant"
 GROQ_GENERATOR_LLM = "llama-3.3-70b-versatile"
 GROQ_CRITIC_LLM    = "llama-3.3-70b-versatile"
-GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"   # 12K TPM, 100K TPD — confirmed working with bypass_n=True
+GROQ_EVALUATOR_LLM = "llama-3.3-70b-versatile"  # 12K TPM, 100K TPD — confirmed working with bypass_n=True
 
 # Evaluation parameters
 TESTSET_SIZE        = 15
@@ -116,23 +117,26 @@ CORPUS_SAMPLE_SIZE  = 30
 MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
+# Default number of questions to score through the RAGAS judge.
+# Lower = fewer tokens = safer on Groq free tier.
+# Override with --eval-questions N at the command line.
+DEFAULT_EVAL_QUESTIONS = 5
+
 # Judge max_tokens — 1024 gives enough headroom for RAGAS chain-of-thought
-# reasoning before outputting a score.
 JUDGE_MAX_TOKENS = 1024
 
 # Groq rate-limit settings
 # llama-3.3-70b-versatile: 12K TPM, 100K TPD
-# With 200-char context truncation each judge call is ~2-3K tokens.
-# 90s inter-sample delay keeps us safely under 12K TPM.
+# 90s inter-sample delay keeps comfortably under 12K TPM.
 INTER_REQUEST_DELAY_S      = 3.0
 RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
-RAGAS_INTER_SAMPLE_DELAY_S = 90    # 90s gives TPM headroom for 70b-versatile (12K TPM)
+RAGAS_INTER_SAMPLE_DELAY_S = 90
 MIN_TPD_REMAINING          = 20_000
                                    # Groq TPD resets at midnight UTC (7 PM EST / 8 PM EDT)
 
-# Context truncation for judge prompt — keeps each judge call well under 12K TPM
+# Context truncation for judge prompt
 JUDGE_CONTEXT_CHAR_LIMIT = 200
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -402,12 +406,21 @@ def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
 # Section 8: RAGAS evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str) -> dict:
+def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
+                         eval_questions: int = DEFAULT_EVAL_QUESTIONS) -> dict:
+    """
+    Score up to eval_questions samples through the RAGAS judge.
+    Remaining samples in the dataset are skipped to stay within TPD budget.
+    """
+    samples_to_score = dataset.samples[:eval_questions]
+
     print(f"\n[step 3] RAGAS evaluation: {model_label}")
-    print(f"  metrics : faithfulness, answer_relevancy, context_precision")
-    print(f"  judge   : {GROQ_EVALUATOR_LLM} (Groq, 12K TPM, max_tokens={JUDGE_MAX_TOKENS})")
-    print(f"  mode    : sequential, {RAGAS_INTER_SAMPLE_DELAY_S}s delay between samples")
-    print(f"  context : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (truncated for judge prompt)")
+    print(f"  metrics  : faithfulness, answer_relevancy, context_precision")
+    print(f"  judge    : {GROQ_EVALUATOR_LLM} (Groq, 12K TPM, max_tokens={JUDGE_MAX_TOKENS})")
+    print(f"  scoring  : {len(samples_to_score)}/{len(dataset.samples)} samples "
+          f"(use --eval-questions to change)")
+    print(f"  throttle : {RAGAS_INTER_SAMPLE_DELAY_S}s between samples")
+    print(f"  context  : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (truncated for judge)")
 
     evaluator_llm = make_groq_llm(
         GROQ_EVALUATOR_LLM, temperature=0.0, max_tokens=JUDGE_MAX_TOKENS, bypass_n=True
@@ -418,8 +431,8 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str) -> dict:
     metric_names = ["faithfulness", "answer_relevancy", "context_precision"]
     accumulated: dict[str, list[float]] = {m: [] for m in metric_names}
 
-    for i, sample in enumerate(dataset.samples):
-        print(f"  [sample {i+1:02d}/{len(dataset.samples)}] scoring ...")
+    for i, sample in enumerate(samples_to_score):
+        print(f"  [sample {i+1:02d}/{len(samples_to_score)}] scoring ...")
         single = EvaluationDataset(samples=[sample])
         result = evaluate(
             dataset=single,
@@ -437,7 +450,7 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str) -> dict:
             except (TypeError, ValueError):
                 pass
 
-        if i < len(dataset.samples) - 1:
+        if i < len(samples_to_score) - 1:
             print(f"  [throttle] sleeping {RAGAS_INTER_SAMPLE_DELAY_S}s ...")
             time.sleep(RAGAS_INTER_SAMPLE_DELAY_S)
 
@@ -458,14 +471,16 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str) -> dict:
 # Section 9: Report writers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def save_results_json(all_results: dict, testset: list[dict]) -> Path:
+def save_results_json(all_results: dict, testset: list[dict],
+                      eval_questions: int) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     payload = {
-        "timestamp":    timestamp,
-        "testset_size": len(testset),
-        "retrieval":    {"index": "FAISS IndexFlatIP", "k": TOP_K, "embed_model": EMBED_MODEL},
-        "models":       all_results,
-        "testset":      testset,
+        "timestamp":      timestamp,
+        "testset_size":   len(testset),
+        "eval_questions": eval_questions,
+        "retrieval":      {"index": "FAISS IndexFlatIP", "k": TOP_K, "embed_model": EMBED_MODEL},
+        "models":         all_results,
+        "testset":        testset,
     }
     path = RESULTS_DIR / f"ragas_eval_{timestamp}.json"
     with open(path, "w", encoding="utf-8") as f:
@@ -474,7 +489,8 @@ def save_results_json(all_results: dict, testset: list[dict]) -> Path:
     return path
 
 
-def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
+def write_markdown_report(all_results: dict, testset: list[dict],
+                          eval_questions: int) -> Path:
     timestamp      = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
     metrics        = ["faithfulness", "answer_relevancy", "context_precision"]
     llama_scores   = all_results.get("llama",   {}).get("scores", {})
@@ -486,7 +502,7 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
     lines = [
         "# RAGAS Evaluation: FinSight SEC Filing RAG\n\n",
         f"**Date**: {timestamp}  \n",
-        f"**Testset**: {len(testset)} Q+GT pairs  \n",
+        f"**Testset**: {len(testset)} Q+GT pairs ({eval_questions} scored)  \n",
         f"**Corpus**: AAPL, MSFT, GOOGL, AMZN, META — 10-K filings (3 years each)  \n",
         f"**Retrieval**: FAISS IndexFlatIP · BGE-small-en-v1.5 · top-{TOP_K} chunks  \n",
         f"**Judge LLM**: Groq `{GROQ_EVALUATOR_LLM}` (max_tokens={JUDGE_MAX_TOKENS})  \n\n",
@@ -518,11 +534,12 @@ def write_markdown_report(all_results: dict, testset: list[dict]) -> Path:
         f"| Temperature | 0.0 (deterministic) |\n",
         f"| Retrieval k | {TOP_K} |\n",
         f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk |\n",
-        f"| Inter-sample delay | {RAGAS_INTER_SAMPLE_DELAY_S}s |\n\n",
+        f"| Inter-sample delay | {RAGAS_INTER_SAMPLE_DELAY_S}s |\n",
+        f"| Samples scored | {eval_questions} of {len(testset)} |\n\n",
         "---\n\n",
         "## Limitations\n\n",
         "- Groq proxy models differ from deployed vLLM models (see proxy note above)\n",
-        f"- Only {len(testset)} Q+GT pairs — increase `TESTSET_SIZE` for statistical robustness\n",
+        f"- Only {eval_questions} of {len(testset)} Q+GT pairs scored — limited by Groq free-tier TPD\n",
         "- Testset is hand-written; real user queries may differ in distribution\n",
         f"- Judge contexts truncated to {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk to fit within TPM limits\n",
         "- `context_precision` measures retrieval rank quality, not recall coverage\n",
@@ -543,11 +560,15 @@ def main():
     parser = argparse.ArgumentParser(description="FinSight RAGAS Evaluation")
     parser.add_argument("--generate", action="store_true",
                         help="Generate synthetic testset (default: load data/testset.json)")
+    parser.add_argument("--eval-questions", type=int, default=DEFAULT_EVAL_QUESTIONS,
+                        help=f"Number of questions to score through the RAGAS judge "
+                             f"(default: {DEFAULT_EVAL_QUESTIONS}). Lower = fewer tokens used.")
     args = parser.parse_args()
 
     print("=" * 65)
     print("FinSight RAGAS Evaluation")
     print("=" * 65)
+    print(f"  eval-questions: {args.eval_questions} (scoring first {args.eval_questions} samples)")
 
     if not os.getenv("GROQ_API_KEY"):
         sys.exit("[ERROR] GROQ_API_KEY is not set. Add to .env: GROQ_API_KEY=gsk_...\n")
@@ -572,8 +593,10 @@ def main():
             testset = json.load(f)
         print(f"[ok] Loaded {len(testset)} Q+GT pairs")
 
-    if len(testset) < 5:
+    if len(testset) < 3:
         sys.exit(f"[ERROR] Too few Q+GT pairs ({len(testset)}). Check testset file.")
+
+    eval_questions = min(args.eval_questions, len(testset))
 
     models_config = [
         {"key": "llama",   "label": "LLaMA 3.1 8B  (Groq: llama-3.1-8b-instant)", "groq_model": GROQ_LLAMA_MODEL},
@@ -586,13 +609,14 @@ def main():
             pairs=testset, index=index, meta=meta, embedder=embedder,
             model_label=cfg["label"], groq_model=cfg["groq_model"],
         )
-        scores = run_ragas_evaluation(dataset, model_label=cfg["label"])
+        scores = run_ragas_evaluation(dataset, model_label=cfg["label"],
+                                      eval_questions=eval_questions)
         all_results[cfg["key"]] = {
             "label": cfg["label"], "groq_model": cfg["groq_model"], "scores": scores,
         }
 
-    save_results_json(all_results, testset)
-    write_markdown_report(all_results, testset)
+    save_results_json(all_results, testset, eval_questions)
+    write_markdown_report(all_results, testset, eval_questions)
 
     metrics = ["faithfulness", "answer_relevancy", "context_precision"]
     print("\n" + "=" * 65)
