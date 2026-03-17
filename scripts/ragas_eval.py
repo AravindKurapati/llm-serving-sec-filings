@@ -10,17 +10,18 @@ Evaluates LLaMA 3.1 8B and Mistral 7B on three RAGAS quality metrics:
 RUN
 ---
   # Score one model at a time to stay within 100K TPD on Groq free tier:
-  python scripts/ragas_eval.py --model llama   --eval-questions 3  # Day 1
-  python scripts/ragas_eval.py --model mistral --eval-questions 3  # Day 2 after reset
+  python scripts/ragas_eval.py --model llama   --eval-questions 1  # Day 1
+  python scripts/ragas_eval.py --model mistral --eval-questions 1  # Day 2 after reset
 
   # Score both models (may exhaust TPD):
-  python scripts/ragas_eval.py --model both --eval-questions 3
+  python scripts/ragas_eval.py --model both --eval-questions 1
 
   # Use synthetic testset:
   python scripts/ragas_eval.py --model llama --generate
 """
 
 import argparse
+import html
 import json
 import math
 import os
@@ -49,7 +50,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
 from ragas.run_config import RunConfig
-from ragas.metrics import faithfulness, answer_relevancy, context_precision
+from ragas.metrics.collections import faithfulness, answer_relevancy, context_precision
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.testset import TestsetGenerator
@@ -78,8 +79,9 @@ MAX_ANSWER_TOKENS   = 400
 EMBED_MODEL         = "BAAI/bge-small-en-v1.5"
 
 # Default number of questions scored per model.
-# 3 questions x ~30K tokens/question = ~90K tokens — fits in 100K TPD with headroom.
-DEFAULT_EVAL_QUESTIONS = 3
+# Each question costs ~30K tokens through the RAGAS judge.
+# 1 question = ~30K tokens — safe within 100K TPD.
+DEFAULT_EVAL_QUESTIONS = 1
 
 JUDGE_MAX_TOKENS = 1024
 
@@ -88,10 +90,17 @@ INTER_REQUEST_DELAY_S      = 3.0
 RETRY_MAX_ATTEMPTS         = 5
 RETRY_BASE_DELAY_S         = 10.0
 RETRY_BACKOFF_FACTOR       = 2.0
-RAGAS_INTER_SAMPLE_DELAY_S = 90   # 90s between samples keeps well under 12K TPM
+RAGAS_INTER_SAMPLE_DELAY_S = 90
 MIN_TPD_REMAINING          = 20_000
 
+# Context truncation for judge prompt.
+# HTML entities are decoded before truncation so the judge sees clean prose.
 JUDGE_CONTEXT_CHAR_LIMIT = 200
+
+
+def clean_text(text: str) -> str:
+    """Decode HTML entities so the judge sees clean prose instead of &#160; etc."""
+    return html.unescape(text)
 
 
 def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512,
@@ -212,7 +221,7 @@ def build_langchain_docs(meta: list[dict], sample_size: int = CORPUS_SAMPLE_SIZE
         src     = chunk.get("src", chunk.get("source", "unknown"))
         company = chunk.get("company", src.split("_")[0])
         docs.append(Document(
-            page_content=chunk["text"][:500],
+            page_content=clean_text(chunk["text"][:500]),
             metadata={"source": src, "company": company, "doc_id": chunk.get("doc_id", "")},
         ))
     print(f"[ok] Prepared {len(docs)} corpus documents ({len(companies)} companies)")
@@ -249,8 +258,9 @@ def generate_testset(docs: list[Document]) -> list[dict]:
 
 
 def build_prompt(question: str, contexts: list[dict]) -> str:
+    # clean_text decodes HTML entities so the answer model sees readable prose
     formatted = "\n\n".join(
-        f"[{i+1}] (from {c.get('src', c.get('source', 'unknown'))}):\n{c['text'][:600]}"
+        f"[{i+1}] (from {c.get('src', c.get('source', 'unknown'))}):\n{clean_text(c['text'][:600])}"
         for i, c in enumerate(contexts)
     )
     return (
@@ -287,7 +297,8 @@ def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
         ground_truth = pair["ground_truth"]
         print(f"  [{i+1:02d}/{len(pairs)}] {question[:70]}...")
         contexts      = retrieve(question, index, meta, embedder)
-        context_texts = [c["text"][:JUDGE_CONTEXT_CHAR_LIMIT] for c in contexts]
+        # Decode HTML entities before passing to judge — raw &#160; etc. cause NaN scores
+        context_texts = [clean_text(c["text"])[:JUDGE_CONTEXT_CHAR_LIMIT] for c in contexts]
         answer        = get_answer_via_groq(question, contexts, groq_model)
         samples.append(SingleTurnSample(
             user_input=question,
@@ -306,7 +317,7 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     print(f"  judge    : {GROQ_EVALUATOR_LLM} (12K TPM, max_tokens={JUDGE_MAX_TOKENS})")
     print(f"  scoring  : {len(samples_to_score)}/{len(dataset.samples)} samples")
     print(f"  throttle : {RAGAS_INTER_SAMPLE_DELAY_S}s between samples")
-    print(f"  context  : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (truncated for judge)")
+    print(f"  context  : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (HTML decoded, truncated)")
 
     evaluator_llm = make_groq_llm(
         GROQ_EVALUATOR_LLM, temperature=0.0, max_tokens=JUDGE_MAX_TOKENS, bypass_n=True
@@ -413,7 +424,7 @@ def write_markdown_report(all_results: dict, testset: list[dict], eval_questions
         f"| Answer max tokens | {MAX_ANSWER_TOKENS} |\n",
         f"| Temperature | 0.0 (deterministic) |\n",
         f"| Retrieval k | {TOP_K} |\n",
-        f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk |\n",
+        f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (HTML decoded) |\n",
         f"| Inter-sample delay | {RAGAS_INTER_SAMPLE_DELAY_S}s |\n",
         f"| Samples scored per model | {eval_questions} of {len(testset)} |\n\n",
         "---\n\n",
@@ -422,8 +433,9 @@ def write_markdown_report(all_results: dict, testset: list[dict], eval_questions
         f"- Only {eval_questions} of {len(testset)} Q+GT pairs scored — limited by Groq free-tier TPD\n",
         "- LLaMA and Mistral scored on separate days due to 100K TPD constraint\n",
         "- Testset is hand-written; real user queries may differ in distribution\n",
-        f"- Judge contexts truncated to {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk to fit within TPM limits\n",
+        f"- Judge contexts truncated to {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk\n",
         "- `context_precision` measures retrieval rank quality, not recall coverage\n",
+        "- SEC filing chunks contain financial table data which may affect score quality\n",
     ]
 
     report_path = RESULTS_DIR / "ragas_eval.md"
@@ -438,17 +450,18 @@ def main():
     parser.add_argument("--generate", action="store_true",
                         help="Generate synthetic testset (default: load data/testset.json)")
     parser.add_argument("--eval-questions", type=int, default=DEFAULT_EVAL_QUESTIONS,
-                        help=f"Questions to score per model (default: {DEFAULT_EVAL_QUESTIONS})")
+                        help=f"Questions to score per model (default: {DEFAULT_EVAL_QUESTIONS}). "
+                             f"Each question costs ~30K TPD tokens.")
     parser.add_argument("--model", choices=["llama", "mistral", "both"], default="both",
                         help="Which model to evaluate (default: both). "
-                             "Use 'llama' or 'mistral' to run one per day and stay within TPD.")
+                             "Use 'llama' or 'mistral' to run one per day within TPD.")
     args = parser.parse_args()
 
     print("=" * 65)
     print("FinSight RAGAS Evaluation")
     print("=" * 65)
     print(f"  model:          {args.model}")
-    print(f"  eval-questions: {args.eval_questions} per model")
+    print(f"  eval-questions: {args.eval_questions} per model (~{args.eval_questions * 30}K TPD tokens)")
 
     if not os.getenv("GROQ_API_KEY"):
         sys.exit("[ERROR] GROQ_API_KEY is not set. Add to .env: GROQ_API_KEY=gsk_...\n")
@@ -483,7 +496,6 @@ def main():
         {"key": "mistral", "label": "Mistral proxy  (Groq: llama-3.1-8b-instant)", "groq_model": GROQ_MISTRAL_MODEL},
     ]
 
-    # Filter to selected model(s)
     if args.model == "both":
         models_to_run = all_models
     else:
