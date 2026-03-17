@@ -18,6 +18,12 @@ RUN
 
   # Use synthetic testset:
   python scripts/ragas_eval.py --model llama --generate
+
+NOTE on RAGAS API
+-----------------
+  ragas.metrics.collections requires InstructorLLM and is incompatible with
+  LangchainLLMWrapper. We use the legacy ragas.metrics API (deprecated but
+  functional in 0.4.x) and pass llm/embeddings to evaluate(), not at metric init.
 """
 
 import argparse
@@ -50,7 +56,8 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
 from ragas.run_config import RunConfig
-from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextPrecision
+# Legacy API — compatible with LangchainLLMWrapper (collections API requires InstructorLLM)
+from ragas.metrics import faithfulness, answer_relevancy, context_precision  # noqa: F401
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.testset import TestsetGenerator
@@ -325,21 +332,19 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     evaluator_emb = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=EMBED_MODEL))
     run_cfg = RunConfig(max_workers=1)
 
-    # RAGAS 0.4+ requires metric instances with llm/embeddings injected at init time
-    metrics = [
-        Faithfulness(llm=evaluator_llm),
-        AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_emb),
-        ContextPrecision(llm=evaluator_llm),
-    ]
     metric_names = ["faithfulness", "answer_relevancy", "context_precision"]
     accumulated: dict[str, list[float]] = {m: [] for m in metric_names}
 
     for i, sample in enumerate(samples_to_score):
         print(f"  [sample {i+1:02d}/{len(samples_to_score)}] scoring ...")
         single = EvaluationDataset(samples=[sample])
+        # Use legacy API: pass llm/embeddings to evaluate(), not at metric init.
+        # ragas.metrics.collections is incompatible with LangchainLLMWrapper.
         result = evaluate(
             dataset=single,
-            metrics=metrics,
+            metrics=[faithfulness, answer_relevancy, context_precision],
+            llm=evaluator_llm,
+            embeddings=evaluator_emb,
             run_config=run_cfg,
             show_progress=False,
         )
