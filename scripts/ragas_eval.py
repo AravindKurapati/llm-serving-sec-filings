@@ -50,7 +50,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
 from ragas.run_config import RunConfig
-from ragas.metrics.collections import faithfulness, answer_relevancy, context_precision
+from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextPrecision
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.testset import TestsetGenerator
@@ -325,6 +325,8 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     evaluator_emb = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=EMBED_MODEL))
     run_cfg = RunConfig(max_workers=1)
 
+    # Instantiate metrics — RAGAS 0.4+ requires instances, not classes
+    metrics = [Faithfulness(), AnswerRelevancy(), ContextPrecision()]
     metric_names = ["faithfulness", "answer_relevancy", "context_precision"]
     accumulated: dict[str, list[float]] = {m: [] for m in metric_names}
 
@@ -333,7 +335,7 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
         single = EvaluationDataset(samples=[sample])
         result = evaluate(
             dataset=single,
-            metrics=[faithfulness, answer_relevancy, context_precision],
+            metrics=metrics,
             llm=evaluator_llm,
             embeddings=evaluator_emb,
             run_config=run_cfg,
@@ -516,7 +518,7 @@ def main():
     save_results_json(all_results, testset, eval_questions)
     write_markdown_report(all_results, testset, eval_questions)
 
-    metrics = ["faithfulness", "answer_relevancy", "context_precision"]
+    metric_names = ["faithfulness", "answer_relevancy", "context_precision"]
     print("\n" + "=" * 65)
     print("RAGAS Evaluation Complete")
     print("=" * 65)
@@ -524,7 +526,7 @@ def main():
     if args.model == "both":
         print(f"{'Metric':<25} {'LLaMA 3.1 8B':>15} {'Mistral proxy':>15}")
         print("-" * 55)
-        for m in metrics:
+        for m in metric_names:
             l_val  = all_results.get("llama",   {}).get("scores", {}).get(m)
             mi_val = all_results.get("mistral", {}).get("scores", {}).get(m)
             l_str  = f"{l_val:.4f}"  if isinstance(l_val,  float) else "N/A"
@@ -534,7 +536,7 @@ def main():
         model_key = args.model
         print(f"{'Metric':<25} {all_results[model_key]['label'][:20]:>20}")
         print("-" * 47)
-        for m in metrics:
+        for m in metric_names:
             val = all_results[model_key]["scores"].get(m)
             val_str = f"{val:.4f}" if isinstance(val, float) else "N/A"
             print(f"{m:<25} {val_str:>20}")
