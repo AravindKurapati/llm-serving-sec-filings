@@ -325,8 +325,12 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     evaluator_emb = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=EMBED_MODEL))
     run_cfg = RunConfig(max_workers=1)
 
-    # Instantiate metrics — RAGAS 0.4+ requires instances, not classes
-    metrics = [Faithfulness(), AnswerRelevancy(), ContextPrecision()]
+    # RAGAS 0.4+ requires metric instances with llm/embeddings injected at init time
+    metrics = [
+        Faithfulness(llm=evaluator_llm),
+        AnswerRelevancy(llm=evaluator_llm, embeddings=evaluator_emb),
+        ContextPrecision(llm=evaluator_llm),
+    ]
     metric_names = ["faithfulness", "answer_relevancy", "context_precision"]
     accumulated: dict[str, list[float]] = {m: [] for m in metric_names}
 
@@ -336,8 +340,6 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
         result = evaluate(
             dataset=single,
             metrics=metrics,
-            llm=evaluator_llm,
-            embeddings=evaluator_emb,
             run_config=run_cfg,
             show_progress=False,
         )
