@@ -104,10 +104,27 @@ MIN_TPD_REMAINING          = 20_000
 # HTML entities are decoded before truncation so the judge sees clean prose.
 JUDGE_CONTEXT_CHAR_LIMIT = 200
 
+# Minimum fraction of alphabetic characters for a chunk to be considered prose.
+# Chunks below this threshold (e.g. raw financial tables) cause NaN RAGAS scores.
+MIN_ALPHA_RATIO = 0.4
+
 
 def clean_text(text: str) -> str:
     """Decode HTML entities so the judge sees clean prose instead of &#160; etc."""
     return html.unescape(text)
+
+
+def is_prose_chunk(text: str, min_alpha_ratio: float = MIN_ALPHA_RATIO) -> bool:
+    """Return True if text has enough alphabetic content to be scored by RAGAS judge.
+
+    Raw SEC filing table chunks look like '$ 11,487 $ 5,571 $ 9,445 Deferred...'
+    and cause NaN scores because the judge cannot extract meaningful claims.
+    We filter them out by requiring at least min_alpha_ratio of chars to be letters.
+    """
+    if not text:
+        return False
+    alpha = sum(c.isalpha() for c in text)
+    return (alpha / len(text)) >= min_alpha_ratio
 
 
 def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512,
@@ -303,10 +320,22 @@ def build_evaluation_dataset(pairs: list[dict], index, meta: list[dict],
         question     = pair["question"]
         ground_truth = pair["ground_truth"]
         print(f"  [{i+1:02d}/{len(pairs)}] {question[:70]}...")
-        contexts      = retrieve(question, index, meta, embedder)
-        # Decode HTML entities before passing to judge — raw &#160; etc. cause NaN scores
-        context_texts = [clean_text(c["text"])[:JUDGE_CONTEXT_CHAR_LIMIT] for c in contexts]
-        answer        = get_answer_via_groq(question, contexts, groq_model)
+        contexts = retrieve(question, index, meta, embedder)
+
+        # Decode HTML entities and filter out table/numeric chunks.
+        # Raw SEC filing chunks with mostly numbers cause NaN RAGAS scores because
+        # the judge cannot extract meaningful claims from them.
+        all_texts   = [clean_text(c["text"]) for c in contexts]
+        prose_texts = [t for t in all_texts if is_prose_chunk(t)]
+        # Fall back to all chunks if none pass the prose filter
+        context_texts = (prose_texts if len(prose_texts) >= 1 else all_texts)
+        context_texts = [t[:JUDGE_CONTEXT_CHAR_LIMIT] for t in context_texts]
+
+        n_filtered = len(all_texts) - len(prose_texts)
+        if n_filtered > 0:
+            print(f"    [filter] dropped {n_filtered}/{len(all_texts)} table/numeric chunks")
+
+        answer = get_answer_via_groq(question, contexts, groq_model)
         samples.append(SingleTurnSample(
             user_input=question,
             retrieved_contexts=context_texts,
@@ -324,7 +353,7 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     print(f"  judge    : {GROQ_EVALUATOR_LLM} (12K TPM, max_tokens={JUDGE_MAX_TOKENS})")
     print(f"  scoring  : {len(samples_to_score)}/{len(dataset.samples)} samples")
     print(f"  throttle : {RAGAS_INTER_SAMPLE_DELAY_S}s between samples")
-    print(f"  context  : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (HTML decoded, truncated)")
+    print(f"  context  : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (HTML decoded, prose-filtered)")
 
     evaluator_llm = make_groq_llm(
         GROQ_EVALUATOR_LLM, temperature=0.0, max_tokens=JUDGE_MAX_TOKENS, bypass_n=True
@@ -433,7 +462,7 @@ def write_markdown_report(all_results: dict, testset: list[dict], eval_questions
         f"| Answer max tokens | {MAX_ANSWER_TOKENS} |\n",
         f"| Temperature | 0.0 (deterministic) |\n",
         f"| Retrieval k | {TOP_K} |\n",
-        f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (HTML decoded) |\n",
+        f"| Judge context truncation | {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (HTML decoded, prose-filtered) |\n",
         f"| Inter-sample delay | {RAGAS_INTER_SAMPLE_DELAY_S}s |\n",
         f"| Samples scored per model | {eval_questions} of {len(testset)} |\n\n",
         "---\n\n",
@@ -443,8 +472,8 @@ def write_markdown_report(all_results: dict, testset: list[dict], eval_questions
         "- LLaMA and Mistral scored on separate days due to 100K TPD constraint\n",
         "- Testset is hand-written; real user queries may differ in distribution\n",
         f"- Judge contexts truncated to {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk\n",
+        "- Table/numeric SEC filing chunks filtered before scoring (alpha-ratio < 0.4)\n",
         "- `context_precision` measures retrieval rank quality, not recall coverage\n",
-        "- SEC filing chunks contain financial table data which may affect score quality\n",
     ]
 
     report_path = RESULTS_DIR / "ragas_eval.md"
