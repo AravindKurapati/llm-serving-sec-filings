@@ -1,52 +1,54 @@
 [
   {
+    "_note": "QUANTITATIVE — answers require numeric data from filings; faithfulness may be low if table chunks are filtered, but answer_relevancy and ground-truth alignment are the primary signals here.",
     "question": "What was Apple's total net revenue in its most recent fiscal year, and which product category was the largest contributor?",
-    "ground_truth": "Apple's total net revenue was approximately $383 billion in fiscal 2023, with iPhone being the largest revenue segment, followed by Services.",
+    "ground_truth": "Apple's total net sales in fiscal year 2025 (ended September 27, 2025) were over $390 billion, growing approximately 10% from fiscal 2024. iPhone was the largest contributor at over $200 billion, representing roughly half of total net sales. Services was the second-largest and fastest-growing segment, generating over $96 billion. Apple also reported net income of $112 billion in fiscal 2025, up from $94 billion in fiscal 2024.",
     "contexts": []
   },
   {
     "question": "How did Microsoft's operating income change year-over-year, and which business segment contributed most to that growth?",
-    "ground_truth": "Microsoft's operating income grew significantly year-over-year, driven primarily by the Intelligent Cloud segment, which includes Azure cloud services.",
+    "ground_truth": "Microsoft's operating income grew 17% year-over-year to $128.5 billion in fiscal year 2025, up from $109.4 billion in fiscal 2024. The Intelligent Cloud segment, driven by strong Azure cloud services adoption, was the primary contributor to this growth. Microsoft Cloud revenue overall reached $168.9 billion in fiscal 2025, a 23% increase.",
     "contexts": []
   },
   {
     "question": "What was Alphabet's research and development expenditure, and what technology areas did it prioritize?",
-    "ground_truth": "Alphabet spent tens of billions on research and development, with major investments in artificial intelligence, Google Cloud infrastructure, and Other Bets initiatives.",
+    "ground_truth": "Alphabet invested tens of billions of dollars in research and development, with major priorities including artificial intelligence, Google Search infrastructure, Google Cloud expansion (which had a revenue backlog of $242.8 billion as of December 2025), and YouTube. Cost of revenues represented 42% of total revenues in 2025, reflecting heavy investment in technical infrastructure.",
     "contexts": []
   },
   {
-    "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its operating margin compared to the retail segments?",
-    "ground_truth": "AWS generated the majority of Amazon's operating income despite representing a smaller share of total revenue, operating at a significantly higher margin than the North America and International retail segments.",
+    "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its scale of committed customer contracts?",
+    "ground_truth": "AWS generated the majority of Amazon's operating income despite representing a smaller share of total revenue, operating at a significantly higher margin than the North America and International retail segments. As of December 31, 2025, AWS had approximately $244 billion in multi-year performance obligations from enterprise customers — reflecting its dominant position in cloud infrastructure.",
     "contexts": []
   },
   {
-    "question": "What were Meta Platforms' primary sources of revenue, and how did advertising revenue trend after the 2022 decline?",
-    "ground_truth": "Meta's revenue is derived almost entirely from advertising across its Family of Apps, including Facebook and Instagram. Advertising revenue recovered and grew after declining in 2022.",
+    "question": "What were Meta Platforms' primary sources of revenue, and how did the business perform in fiscal year 2025?",
+    "ground_truth": "Meta's revenue is derived almost entirely from advertising across its Family of Apps, including Facebook and Instagram. In fiscal year 2025, Meta reported total revenue of approximately $201 billion (up from $165 billion in 2024) and operating income of approximately $83 billion. Net income was approximately $60 billion. Reality Labs continued to report significant operating losses due to investment in virtual and augmented reality development.",
     "contexts": []
   },
   {
-    "question": "What key supply chain and international operation risks does Apple identify in its SEC filings?",
-    "ground_truth": "Apple identifies risks including reliance on single-source suppliers, geopolitical tensions affecting manufacturing in Asia, foreign exchange fluctuations, and regulatory scrutiny in international markets.",
+    "_note": "QUALITATIVE — answers come directly from MD&A and Risk Factor prose chunks; faithfulness and context_precision should be meaningfully non-zero.",
+    "question": "What supply chain and international operation risks does Apple identify in its most recent 10-K filing?",
+    "ground_truth": "Apple's 10-K identifies several supply chain risks: its manufacturing and assembly operations are concentrated outside the United States, making the company dependent on global and regional economic conditions. The company relies on a complex global supply chain and must obtain components in sufficient quantities at commercially reasonable terms. Adverse macroeconomic conditions — including recession, unemployment, inflation, and currency fluctuations — can hurt consumer demand. Apple also notes that supplier code of conduct violations can materially and adversely affect its business and reputation, and that supply chain changes require significant time and resources.",
     "contexts": []
   },
   {
-    "question": "How much did Microsoft invest in research and development, and what were its key technology focus areas?",
-    "ground_truth": "Microsoft invested heavily in research and development, with significant focus on artificial intelligence integration across its product portfolio, cloud computing, and developer tools.",
+    "question": "How does Microsoft approach cybersecurity risk management and governance according to its SEC filings?",
+    "ground_truth": "Microsoft treats cybersecurity as a top corporate priority, focused on protecting its digital ecosystem for customers and employees and supporting cloud resiliency. The company's Chief Information Security Officer (CISO) — who has prior experience as CTO and in senior leadership across multiple organizations — oversees the strategy, engineering, and operations of cybersecurity company-wide. Microsoft has established a Cybersecurity Governance Council (CGC) to oversee cybersecurity initiatives. The company describes its role as central to the world's digital ecosystem, making security a foundational obligation across all products and services.",
     "contexts": []
   },
   {
-    "question": "How did Google Services and Google Cloud each contribute to Alphabet's operating results?",
-    "ground_truth": "Google Services, which includes Search and YouTube advertising, generated the vast majority of Alphabet's revenue and operating income. Google Cloud grew rapidly but operated at a lower margin than Google Services.",
+    "question": "What antitrust and regulatory actions has Alphabet faced regarding Google Search, and what remedies have been imposed?",
+    "ground_truth": "A U.S. District Court ruled against Google in August 2024 in a Search and Search advertising antitrust case. The final judgment was entered in December 2025, imposing restrictions on how Google distributes its services. The judgment requires Google to share certain search data with competitors and to offer search syndication to rivals. Google filed an appeal in January 2026, and the DOJ and state attorneys general also filed appeals in February 2026. These legal proceedings represent a significant regulatory risk to Alphabet's core Search business.",
     "contexts": []
   },
   {
-    "question": "What regulatory and competitive risks does Amazon highlight in its SEC filings?",
-    "ground_truth": "Amazon highlights risks including antitrust scrutiny, labor regulations, data privacy laws, intense competition across its retail and cloud businesses, and cybersecurity threats.",
+    "question": "What does Amazon's 10-K reveal about its workforce size and the competitive dynamics around technical talent?",
+    "ground_truth": "As of December 31, 2025, Amazon employed approximately 1,576,000 full-time and part-time employees globally. The company faces intense competition for software engineers, computer scientists, and AI and machine learning technical staff. Amazon describes labor market constraints as a risk and notes its goal of being 'Earth's best employer.' International operations face additional complexity from labor regulations and limits on repatriation of funds across jurisdictions.",
     "contexts": []
   },
   {
-    "question": "What was Meta's operating income and how did Reality Labs losses affect its overall financial results?",
-    "ground_truth": "Meta's overall operating income was driven by the Family of Apps segment, while Reality Labs reported multi-billion dollar operating losses annually due to heavy investment in virtual and augmented reality development.",
+    "question": "What privacy, data protection, and developer ecosystem risks does Meta Platforms disclose in its SEC filings?",
+    "ground_truth": "Meta's SEC filings disclose several privacy and data risks: the company is subject to privacy, safety, and security investigations and audits of its platform applications. Product changes that restrict developer access to user data — while necessary for privacy compliance — have adversely affected and are expected to continue affecting revenues and relationships with developers. Actions enforcing developer policies have impacted monetization. Meta also faces risk from conflicting regulations across jurisdictions, including child safety requirements and evolving data protection laws that may require costly product changes.",
     "contexts": []
   }
 ]

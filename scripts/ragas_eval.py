@@ -32,6 +32,7 @@ import json
 import math
 import os
 import random
+import re
 import sys
 import time
 from datetime import datetime
@@ -49,6 +50,7 @@ try:
 except ImportError:
     GroqRateLimitError = Exception
 
+from openai import OpenAI as _OpenAIClient
 from langchain_groq import ChatGroq
 from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -56,9 +58,8 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
 from ragas.run_config import RunConfig
-# Legacy API — compatible with LangchainLLMWrapper (collections API requires InstructorLLM)
 from ragas.metrics import faithfulness, answer_relevancy, context_precision  # noqa: F401
-from ragas.llms import LangchainLLMWrapper
+from ragas.llms import LangchainLLMWrapper, llm_factory
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.testset import TestsetGenerator
 
@@ -102,11 +103,22 @@ MIN_TPD_REMAINING          = 20_000
 
 # Context truncation for judge prompt.
 # HTML entities are decoded before truncation so the judge sees clean prose.
-JUDGE_CONTEXT_CHAR_LIMIT = 200
+JUDGE_CONTEXT_CHAR_LIMIT = 800
 
 # Minimum fraction of alphabetic characters for a chunk to be considered prose.
 # Chunks below this threshold (e.g. raw financial tables) cause NaN RAGAS scores.
 MIN_ALPHA_RATIO = 0.4
+
+# Structural SEC patterns that slip through the alpha-ratio filter.
+# These are XBRL annotations, table headers, and filing metadata that have
+# high alpha ratios (all words, no numbers) but contain no scorable prose.
+_STRUCTURAL_PATTERNS = [
+    re.compile(r"\(Tables?\)", re.I),            # "(Tables)" / "(Table)"
+    re.compile(r"\[Abst\b", re.I),               # XBRL Abstract tags e.g. "[Abstract"
+    re.compile(r"\d+\s+Months?\s+Ended", re.I),  # "12 Months Ended Sep. 27, 2025"
+    re.compile(r"auth_ref", re.I),               # XBRL auth_ref metadata
+    re.compile(r"^\s*[\{\"]http", re.M),         # JSON/XBRL URL blobs: {"http://..." or "http://...
+]
 
 
 def clean_text(text: str) -> str:
@@ -117,14 +129,32 @@ def clean_text(text: str) -> str:
 def is_prose_chunk(text: str, min_alpha_ratio: float = MIN_ALPHA_RATIO) -> bool:
     """Return True if text has enough alphabetic content to be scored by RAGAS judge.
 
-    Raw SEC filing table chunks look like '$ 11,487 $ 5,571 $ 9,445 Deferred...'
-    and cause NaN scores because the judge cannot extract meaningful claims.
-    We filter them out by requiring at least min_alpha_ratio of chars to be letters.
+    Two-stage filter evaluated on the FIRST 400 chars (not the full chunk):
+    1. Alpha-ratio gate: raw numeric table chunks ('$ 11,487 $ 5,571...') fail here.
+       Checking only the start prevents prose that appears AFTER a table header from
+       rescuing an otherwise unscoreable chunk.
+    2. Structural-pattern gate: XBRL/table-header chunks that are all words but carry
+       no scorable prose (e.g. '(Tables) 12 Months Ended ... [Abstract') fail here.
     """
     if not text:
         return False
-    alpha = sum(c.isalpha() for c in text)
-    return (alpha / len(text)) >= min_alpha_ratio
+    # Two-window alpha check:
+    # - Narrow (first 150 chars): catches table headers where row labels ("Current",
+    #   "Deferred", "Total") pad the alpha ratio by 400 chars even though most
+    #   content is dollar amounts.  150 chars is short enough that financial rows
+    #   (e.g. "Current $ 11,487 $ 5,571 Deferred (1,804)") still fail here.
+    # - Wide (first 400 chars): catches anything that slips through the narrow gate.
+    # Both windows must pass.
+    for window in (150, 400):
+        s = text[:window]
+        alpha = sum(c.isalpha() for c in s)
+        if (alpha / len(s)) < min_alpha_ratio:
+            return False
+    sample = text[:400]
+    for pat in _STRUCTURAL_PATTERNS:
+        if pat.search(sample):
+            return False
+    return True
 
 
 def make_groq_llm(model_name: str, temperature: float = 0.0, max_tokens: int = 512,
@@ -355,11 +385,23 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     print(f"  throttle : {RAGAS_INTER_SAMPLE_DELAY_S}s between samples")
     print(f"  context  : {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk (HTML decoded, prose-filtered)")
 
-    evaluator_llm = make_groq_llm(
-        GROQ_EVALUATOR_LLM, temperature=0.0, max_tokens=JUDGE_MAX_TOKENS, bypass_n=True
+    # Use llm_factory with Groq's OpenAI-compatible endpoint.
+    # LangchainLLMWrapper sends plain prompts expecting freeform JSON — Groq models
+    # add preamble text that RAGAS can't parse, causing NaN scores.
+    # llm_factory uses instructor for structured output (Pydantic-enforced JSON),
+    # which guarantees parseable responses regardless of model verbosity.
+    _groq_client = _OpenAIClient(
+        api_key=os.environ["GROQ_API_KEY"],
+        base_url="https://api.groq.com/openai/v1",
+    )
+    evaluator_llm = llm_factory(
+        GROQ_EVALUATOR_LLM,
+        client=_groq_client,
+        temperature=0.0,
+        max_tokens=JUDGE_MAX_TOKENS,
     )
     evaluator_emb = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(model_name=EMBED_MODEL))
-    run_cfg = RunConfig(max_workers=1)
+    run_cfg = RunConfig(max_workers=1, max_retries=3)
 
     metric_names = ["faithfulness", "answer_relevancy", "context_precision"]
     accumulated: dict[str, list[float]] = {m: [] for m in metric_names}
@@ -367,22 +409,23 @@ def run_ragas_evaluation(dataset: EvaluationDataset, model_label: str,
     for i, sample in enumerate(samples_to_score):
         print(f"  [sample {i+1:02d}/{len(samples_to_score)}] scoring ...")
         single = EvaluationDataset(samples=[sample])
-        # Use legacy API: pass llm/embeddings to evaluate(), not at metric init.
-        # ragas.metrics.collections is incompatible with LangchainLLMWrapper.
         result = evaluate(
             dataset=single,
             metrics=[faithfulness, answer_relevancy, context_precision],
             llm=evaluator_llm,
             embeddings=evaluator_emb,
             run_config=run_cfg,
+            raise_exceptions=True,
             show_progress=False,
         )
+        # result[m] returns a list in RAGAS 0.4.x — extract via DataFrame to get a scalar.
+        df = result.to_pandas()
         for m in metric_names:
             try:
-                val = float(result[m])
+                val = float(df[m].iloc[0])
                 if not math.isnan(val):
                     accumulated[m].append(val)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, KeyError, IndexError):
                 pass
 
         if i < len(samples_to_score) - 1:
@@ -472,7 +515,7 @@ def write_markdown_report(all_results: dict, testset: list[dict], eval_questions
         "- LLaMA and Mistral scored on separate days due to 100K TPD constraint\n",
         "- Testset is hand-written; real user queries may differ in distribution\n",
         f"- Judge contexts truncated to {JUDGE_CONTEXT_CHAR_LIMIT} chars/chunk\n",
-        "- Table/numeric SEC filing chunks filtered before scoring (alpha-ratio < 0.4)\n",
+        "- SEC filing chunks filtered before scoring: alpha-ratio < 0.4 AND no XBRL/table-header patterns\n",
         "- `context_precision` measures retrieval rank quality, not recall coverage\n",
     ]
 
