@@ -193,21 +193,33 @@ class VLLMServer:
         _, ids = self.index.search(vec, k)
         return [self.meta[i] for i in ids[0]]
 
-    def build_prompt(self, question: str, contexts: list) -> str:
+    SYSTEM_PROMPTS = {
+        "concise": (
+            "You are a financial analyst. Answer using ONLY the context below. "
+            "Be brief and direct. Cite sources as [1], [2]. 2-3 sentences maximum."
+        ),
+        "detailed": (
+            "You are a financial analyst. Answer using ONLY the context below. "
+            "Be thorough and structured. Cite sources as [1], [2]. "
+            "Use bullet points for complex answers."
+        ),
+    }
+
+    def build_prompt(self, question: str, contexts: list, mode: str = "concise") -> str:
+        system = self.SYSTEM_PROMPTS.get(mode, self.SYSTEM_PROMPTS["concise"])
         formatted = "\n\n".join(
             f"[{i+1}] (from {c['src']}):\n{c['text'][:600]}"
             for i, c in enumerate(contexts)
         )
         return (
-            "You are a financial analyst. Answer using ONLY the context below.\n"
-            "Cite sources as [1], [2] etc. Be concise and factual.\n\n"
+            f"{system}\n\n"
             f"Question: {question}\n\n"
             f"Context:\n{formatted}\n\n"
             "Answer:"
         )
 
     @modal.method()
-    def query_stream(self, question: str, k: int = 5, max_tokens: int = 400):
+    def query_stream(self, question: str, k: int = 5, max_tokens: int = 400, mode: str = "concise"):
         """
         Generator that yields SSE-formatted strings.
 
@@ -220,7 +232,7 @@ class VLLMServer:
         import json
 
         contexts = self.retrieve(question, k=k)
-        prompt   = self.build_prompt(question, contexts)
+        prompt   = self.build_prompt(question, contexts, mode)
 
         payload = {
             "model": self.model_id,
@@ -318,10 +330,11 @@ def _make_streaming_app(model_name: str):
         question   = item.get("question", "")
         k          = int(item.get("k", 5))
         max_tokens = int(item.get("max_tokens", 400))
+        mode       = item.get("mode", "concise")
 
         server = VLLMServer(model_name=model_name)
         return StreamingResponse(
-            server.query_stream.remote_gen(question, k, max_tokens),
+            server.query_stream.remote_gen(question, k, max_tokens, mode),
             media_type="text/event-stream",
             headers={
                 "X-Accel-Buffering": "no",

@@ -55,6 +55,7 @@ async def stream_endpoint(item: dict):
     question   = item.get("question", "")
     k          = int(item.get("k", 5))
     max_tokens = int(item.get("max_tokens", 20))
+    _mode      = item.get("mode", "concise")  # accepted, not used in mock
 
     return StreamingResponse(
         _token_stream(question, k, max_tokens),
