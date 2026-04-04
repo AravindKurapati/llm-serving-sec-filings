@@ -5,3 +5,7 @@ __pycache__/
 *.pyo
 data/index/
 results/ragas_eval_*.json
+
+frontend/.env.local
+frontend/node_modules/
+frontend/dist/

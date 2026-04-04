@@ -99,3 +99,53 @@ User
 | Session expires, data lost | Persistent Volumes |
 | No public URL without ngrok | Built-in web endpoints |
 | Can't pin GPU type | Explicit `gpu="A10G"` |
+
+## Frontend Quick Start (React)
+
+The project includes a React frontend in the `frontend/` directory as an alternative to Streamlit.
+
+### Setup
+
+1. **Configure environment variables:**
+   ```bash
+   cd frontend
+   cp .env.local.example .env.local
+   ```
+   
+   Edit `.env.local` and fill in the two Modal endpoint URLs (obtained after running `modal deploy finsight.py`):
+   ```
+   VITE_LLAMA_URL=https://your-workspace--finsight-api-query.modal.run
+   VITE_MISTRAL_URL=https://your-workspace--finsight-api-query.modal.run
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Run development server:**
+   ```bash
+   npm run dev
+   ```
+   
+   Opens at http://localhost:5173
+
+### Testing without Modal deployed
+
+To develop/test the frontend without a live Modal deployment:
+
+1. Run the mock server in one terminal:
+   ```bash
+   python -m uvicorn scripts.mock_stream_server:app --port 8001
+   ```
+
+2. In `.env.local`, set both URLs to the local mock server:
+   ```
+   VITE_LLAMA_URL=http://localhost:8001
+   VITE_MISTRAL_URL=http://localhost:8001
+   ```
+
+3. Start the dev server in another terminal:
+   ```bash
+   npm run dev
+   ```
