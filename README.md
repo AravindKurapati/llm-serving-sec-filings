@@ -12,26 +12,26 @@ This project started as a Kaggle notebook and evolved into a production Modal de
 - Chunks and embeds them with BGE-small into a FAISS index
 - Serves LLaMA 3.1 8B and Mistral 7B via vLLM on Modal A10G GPUs
 - Benchmarks TTFT, TPOT, and throughput for both models
-- Exposes a FastAPI endpoint for a Streamlit chat frontend
+- Streams tokens to a React frontend via SSE (real TTFT, no blocking)
 
 ---
 
 ## Results
 
-Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens:
+Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens. TTFT measured as real wall-clock time to first SSE token via vLLM server mode — not estimated.
 
 | Metric | LLaMA 3.1 8B | Mistral 7B |
 |--------|-------------|------------|
-| TTFT p50 | 4,616ms | 1,015ms |
-| TTFT p95 | 4,631ms | 2,402ms |
-| TPOT p50 | 23.1ms | 23.5ms |
-| Throughput avg | 28.9 tok/s | 28.6 tok/s |
+| TTFT p50 | 198ms | 240ms |
+| TTFT p95 | 882ms | 1,225ms |
+| TPOT p50 | 34.3ms | 31.6ms |
+| Throughput avg | 27.6 tok/s | 29.5 tok/s |
 
-**Key finding**: Mistral is 4.5x faster on TTFT with nearly identical throughput and TPOT. The bottleneck is prefill, not decode. Mistral's smaller architecture prefills faster.
+**Key finding**: On A10G hardware these two models are infrastructure-equivalent — TTFT p50 is within 42ms of each other (~200ms both), and throughput is within 7%. The real differentiator is **output quality**: Mistral produces concise, well-structured answers that stop naturally; LLaMA tends toward verbosity and citation-repetition artifacts at the token limit. Choose based on answer quality requirements, not latency.
 
-Mistral also produced more concise, better-structured answers without the citation repetition artifacts LLaMA showed at the 400-token limit.
+Note: p95 TTFT reflects the cold KV-cache first request. Warm-cache requests settle at ~200–240ms for both models.
 
-Full results: [`results/benchmark_20260222.json`](results/benchmark_20260222.json)
+Full results: [`results/benchmark_20260415_190523.json`](results/benchmark_20260415_190523.json)
 
 ---
 
@@ -118,11 +118,12 @@ Short version: Kaggle's T4 GPUs are sm_75. Modern vLLM (0.6+) requires FlashInfe
 
 ```
 User
- └─ Streamlit (runs locally)
-     └─ POST /v1/chat (Modal public URL)
-         └─ FastAPI endpoint (Modal, CPU)
-             └─ vLLM LLM.generate() (Modal, A10G GPU)
+ └─ React frontend (runs locally, npm run dev)
+     └─ POST /v1/stream (Modal public URL, SSE)
+         └─ FastAPI streaming proxy (Modal, CPU)
+             └─ VLLMServer.query_stream() (Modal, A10G GPU)
                  ├─ BGE-small embedder → FAISS retrieval
+                 ├─ vllm serve subprocess → /v1/chat/completions
                  └─ LLaMA 3.1 8B or Mistral 7B
                      └─ Modal Volume (persists index + model weights)
 ```

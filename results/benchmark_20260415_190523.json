@@ -1,0 +1,375 @@
+{
+  "timestamp": "20260415_190523",
+  "summary": {
+    "llama": {
+      "model": "llama",
+      "n_questions": 5,
+      "ttft_p50_ms": 198.3,
+      "ttft_p95_ms": 882.4,
+      "tpot_p50_ms": 34.3,
+      "throughput_avg_tps": 27.6
+    },
+    "mistral": {
+      "model": "mistral",
+      "n_questions": 5,
+      "ttft_p50_ms": 239.5,
+      "ttft_p95_ms": 1225.1,
+      "tpot_p50_ms": 31.6,
+      "throughput_avg_tps": 29.5
+    }
+  },
+  "llama_results": [
+    {
+      "answer": "Based on the provided context, Apple's main supply chain risks include:\n\n1. Violations of the supplier code of conduct, which can materially adversely affect the Company's business, reputation, results of operations, financial condition, and stock price [1].\n2. Exposure to additional regulatory and operational risks associated with changes or additions to the Company's supply chain [1].\n3. Dependence on global and regional economic conditions, which can impact consumer confidence and spending [2].\n4. Adverse macroeconomic conditions, including slow growth or recession, high unemployment, inflation, tighter credit, higher interest rates, and currency fluctuations [2].\n5. Supply chain disruptions, including labor shortages, strikes, or other disruptions in logistics and supply chain [4].\n6. Failure to engage third parties with the necessary capabilities or capacity on reasonable terms, or if those engaged with fail to meet their obligations [4].\n7. Risks associated with the Company's environmental and societal goals and initiatives, which involve risks and uncertainties [5].\n\nThese risks can negatively impact Apple's operations, product development, sales, and ultimately, its financial condition and stock price.",
+      "model": "llama",
+      "question": "What are Apple's main supply chain risks?",
+      "metrics": {
+        "ttft_ms": 882.4,
+        "tpot_ms": 34.3,
+        "total_time_s": 8.66,
+        "tokens": 228,
+        "input_tokens": 700,
+        "throughput_tps": 26.3
+      },
+      "contexts": [
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "to adhere to its supplier code of conduct, violations of the supplier code of conduct occur from time to time and can materially adversely affect the Company&#8217;s business, reputation, results of o"
+        },
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "Company&#8217;s total net sales. In addition, the Company&#8217;s global supply chain is large and complex and a majority of the Company&#8217;s supplier facilities, including manufacturing and assemb"
+        },
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "little or no profit or even at a loss. The Company has a minority market share in the global smartphone, personal computer, tablet and wearables markets, and some of the markets in which the Company c"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "future experience, supply or labor shortages, strikes or other disruptions in logistics and the supply chain, which could result in shipping delays and negatively impact our operations, product develo"
+        },
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "Company&#8217;s business. Various stakeholders, including governments, regulators, investors, employees, customers and others, have differing expectations about a wide range of social and other issues"
+        }
+      ]
+    },
+    {
+      "answer": "According to Microsoft's 10-K report [1], [3], [4], the company describes its cloud revenue growth as follows:\n\n- In Fiscal Year 2025, Microsoft Cloud revenue increased 23% to $168.9 billion [4].\n- The Intelligent Cloud segment, which includes Azure, saw revenue growth driven by Azure [3].\n- The Productivity and Business Processes segment, which includes Microsoft 365 Commercial cloud, also saw revenue growth driven by Microsoft 365 Commercial cloud [3].\n- The growth in Microsoft Cloud drove the 19% increase in cost of revenue [3].\n\nThese statements indicate that Microsoft's cloud revenue growth is a significant contributor to the company's overall revenue growth.",
+      "model": "llama",
+      "question": "How does Microsoft describe its cloud revenue growth?",
+      "metrics": {
+        "ttft_ms": 353.2,
+        "tpot_ms": 34.3,
+        "total_time_s": 5.19,
+        "tokens": 142,
+        "input_tokens": 944,
+        "throughput_tps": 27.3
+      },
+      "contexts": [
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "&#160; 19% &#160; Operating expenses &#160; &#160; 65,365 &#160; &#160; &#160; 61,575 &#160; &#160; &#160; 6% &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160;"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "growth metric that brings revenue from PC market-driven businesses together, as well as elevating our cloud revenue growth metrics to align to our strategic focus on cloud growth. Commercial Our comme"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "&#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; Fiscal Year 2025 Compared with Fiscal Year 2024 Revenue incr"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "licensing and supporting an array of software products; delivering relevant online advertising to a global audience; and designing and selling devices. Our most significant expenses are related to com"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "and the impracticability of determining the geographic source of the revenue. 84 PART II Item 8 &#160; Revenue, classified by significant product and service offerings, was as follows: &#160; (In mill"
+        }
+      ]
+    },
+    {
+      "answer": "According to Meta's 10-K filings, Meta is making significant investments in AI infrastructure to support its initiatives across products and services. \n\nMeta believes that the metaverse will become the next computing platform and the future of social interaction, and is innovating in AI technologies to build new experiences that make its platform more social, useful, and immersive [1], [4]. \n\nMeta's AI investments support initiatives such as content ranking, discovery engine, and advertising tools, and the company expects to continue increasing these investments [1], [5]. \n\nMeta has also made significant investments in AI infrastructure, including investments in headcount and specialized technical personnel, to support its efforts to enhance its products, features, and advertising tools [5].",
+      "model": "llama",
+      "question": "What does Meta say about AI infrastructure investment?",
+      "metrics": {
+        "ttft_ms": 193.0,
+        "tpot_ms": 34.2,
+        "total_time_s": 5.19,
+        "tokens": 147,
+        "input_tokens": 705,
+        "throughput_tps": 28.3
+      },
+      "contexts": [
+        {
+          "src": "META_00013268_10K.txt",
+          "text": "the metaverse is in the very early stages of its development, we believe it will become the next computing platform and the future of social interaction. Across our work, we are innovating in artifici"
+        },
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "influenced by a number of factors, including: Expanded AI Offerings in our Products and Services: The continuing evolution of the online world has contributed to the growth of our business. We expect "
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "We are also making significant investments in artificial intelligence (AI) initiatives across our business. For example, we continue to launch new AI features on our products, including support for ne"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "rather an entire ecosystem of experiences, devices, and new technologies powered by AI. While the metaverse is in the very early stages of its development, we believe it will become the next computing"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "other monetary penalties in connection with legal and regulatory developments that may be material to our business. We have made significant investments in AI initiatives, including investments in inf"
+        }
+      ]
+    },
+    {
+      "answer": "Based on the provided context, Google's advertising revenue has increased over the past 3 years. \n\nIn 2024, Google's advertising revenue was $264,590 million. \nIn 2025, Google's advertising revenue was $294,691 million, representing a 11.5% increase from 2024. \n\nSource: [1]",
+      "model": "llama",
+      "question": "How has Google's advertising revenue changed over 3 years?",
+      "metrics": {
+        "ttft_ms": 198.3,
+        "tpot_ms": 34.3,
+        "total_time_s": 2.66,
+        "tokens": 73,
+        "input_tokens": 768,
+        "throughput_tps": 27.4
+      },
+      "contexts": [
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "operations, and financial results. Our past results may not be indicative of our future performance, and our financial results may differ materially from historical trends. Financial Results Revenues "
+        },
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "defined as click-driven revenues divided by our total number of paid clicks and represents the average amount we charge advertisers for each engagement by users. Impressions include impressions displa"
+        },
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "in-app purchases, and devices. Basis of Consolidation The consolidated financial statements of Alphabet include the accounts of Alphabet and entities consolidated under the variable interest and votin"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "of most servers and network assets to 5.5 years, effective January 1, 2025. Based on the servers and network assets placed in service as of December 31, 2024, the financial impact of this change in es"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "user engagement, and ability to deliver ad impressions may decrease, we may become less attractive to developers and marketers, and our revenue and results of operations may be materially and adversel"
+        }
+      ]
+    },
+    {
+      "answer": "Based on the provided context, Amazon discloses the following cybersecurity risks:\n\n1. Data loss or other security incidents [1].\n2. Cybersecurity risks to which the company is exposed, including breaches that may impact data [3].\n3. Cybersecurity risks and associated mitigations, which are evaluated by senior leadership as part of enterprise risk assessments [4].\n\nAmazon also discloses that it has measures in place to manage these risks, including:\n\n1. A Security Committee that oversees policies and procedures for protecting cybersecurity infrastructure and compliance with data protection and security regulations [1].\n2. A chief security officer who heads the team of trained cybersecurity professionals [2].\n3. Engagement of assessors, consultants, auditors, or other third parties to assist with assessing, identifying, and managing cybersecurity risks [4].\n4. Regular evaluation of cybersecurity risks and associated mitigations by senior leadership as part of enterprise risk assessments [4].",
+      "model": "llama",
+      "question": "What cybersecurity risks does Amazon disclose?",
+      "metrics": {
+        "ttft_ms": 194.0,
+        "tpot_ms": 34.3,
+        "total_time_s": 6.47,
+        "tokens": 184,
+        "input_tokens": 711,
+        "throughput_tps": 28.5
+      },
+      "contexts": [
+        {
+          "src": "AMZN_00010187_10K.txt",
+          "text": "we face is discussed in Item 1A of Part I, &#8220;Risk Factors,&#8221; under the heading &#8220;We Could Be Harmed by Data Loss or Other Security Incidents,&#8221; which should be read in conjunction "
+        },
+        {
+          "src": "AMZN_00010187_10K.txt",
+          "text": "security regulations, and related risks. The Security Committee receives reports regarding such risks from management, including our chief security officer, and reports to the Board at least annually."
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "breaches that may impact our data. Our board of directors has oversight of our strategic and business risk management and has delegated cybersecurity risk management oversight to the Audit Privacy Com"
+        },
+        {
+          "src": "AMZN_00010187_10K.txt",
+          "text": "trained cybersecurity professionals. In addition to our extensive in-house cybersecurity capabilities, at times we also engage assessors, consultants, auditors, or other third parties to assist with a"
+        },
+        {
+          "src": "META_00013268_10K.txt",
+          "text": "{ e.nextSibling.style.display='block'; } else { e.nextSibling.style.display='none'; } } v3.24.4 Cybersecurity Risk Management and Strategy Disclosure 12 Months Ended Dec. 31, 2024 Cybersecurity Risk M"
+        }
+      ]
+    }
+  ],
+  "mistral_results": [
+    {
+      "answer": " Apple's main supply chain risks include:\n\n1. Violations of the supplier code of conduct, which can negatively impact the company's business, reputation, and financial performance [1].\n2. Dependence on global and regional economic conditions, with adverse macroeconomic conditions potentially affecting consumer confidence and spending [2].\n3. Competition in the global smartphone, personal computer, tablet, and wearables markets, where Apple has a minority market share and growth or contraction can impact the company's performance [3].\n4. Supply chain disruptions due to logistics issues, labor shortages, strikes, or other factors, which can lead to shipping delays and impact operations, product development, and sales [4].\n5. Environmental and social risks associated with the company's business, including stakeholder expectations and the implementation of environmental and other goals and initiatives [5].\n\nSources:\n[1] AAPL_00003201_10K.txt\n[2] AAPL_00003201_10K.txt\n[3] AAPL_00003201_10K.txt\n[4] META_00016282_10K.txt\n[5] AAPL_00003201_10K.txt",
+      "model": "mistral",
+      "question": "What are Apple's main supply chain risks?",
+      "metrics": {
+        "ttft_ms": 1225.1,
+        "tpot_ms": 31.6,
+        "total_time_s": 10.84,
+        "tokens": 305,
+        "input_tokens": 804,
+        "throughput_tps": 28.1
+      },
+      "contexts": [
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "to adhere to its supplier code of conduct, violations of the supplier code of conduct occur from time to time and can materially adversely affect the Company&#8217;s business, reputation, results of o"
+        },
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "Company&#8217;s total net sales. In addition, the Company&#8217;s global supply chain is large and complex and a majority of the Company&#8217;s supplier facilities, including manufacturing and assemb"
+        },
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "little or no profit or even at a loss. The Company has a minority market share in the global smartphone, personal computer, tablet and wearables markets, and some of the markets in which the Company c"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "future experience, supply or labor shortages, strikes or other disruptions in logistics and the supply chain, which could result in shipping delays and negatively impact our operations, product develo"
+        },
+        {
+          "src": "AAPL_00003201_10K.txt",
+          "text": "Company&#8217;s business. Various stakeholders, including governments, regulators, investors, employees, customers and others, have differing expectations about a wide range of social and other issues"
+        }
+      ]
+    },
+    {
+      "answer": " Microsoft describes its cloud revenue growth as a significant contributor to its overall revenue growth. The company groups revenue from cloud-related businesses under the \"Intelligent Cloud\" segment, which includes Azure and Microsoft 365 Commercial cloud. In Fiscal Year 2025, Microsoft Cloud revenue increased by 23% to $168.9 billion compared to the previous year [4]. This growth is primarily driven by Azure and Microsoft 365 Commercial cloud [3, 4]. [1, 2, 3, 4, 5]",
+      "model": "mistral",
+      "question": "How does Microsoft describe its cloud revenue growth?",
+      "metrics": {
+        "ttft_ms": 318.4,
+        "tpot_ms": 31.9,
+        "total_time_s": 4.11,
+        "tokens": 120,
+        "input_tokens": 1297,
+        "throughput_tps": 29.2
+      },
+      "contexts": [
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "&#160; 19% &#160; Operating expenses &#160; &#160; 65,365 &#160; &#160; &#160; 61,575 &#160; &#160; &#160; 6% &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160;"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "growth metric that brings revenue from PC market-driven businesses together, as well as elevating our cloud revenue growth metrics to align to our strategic focus on cloud growth. Commercial Our comme"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "&#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; &#160; Fiscal Year 2025 Compared with Fiscal Year 2024 Revenue incr"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "licensing and supporting an array of software products; delivering relevant online advertising to a global audience; and designing and selling devices. Our most significant expenses are related to com"
+        },
+        {
+          "src": "MSFT_00009501_10K.txt",
+          "text": "and the impracticability of determining the geographic source of the revenue. 84 PART II Item 8 &#160; Revenue, classified by significant product and service offerings, was as follows: &#160; (In mill"
+        }
+      ]
+    },
+    {
+      "answer": " Meta, in its filings, states that they are investing significantly in artificial intelligence (AI) technologies to build new experiences for their metaverse platform. These investments support various initiatives across their products and services, including content ranking systems, recommendation engines, advertising tools, and new generative AI experiences [1], [4], [5]. They also mention ongoing investments in infrastructure and headcount for AI model development and training [5]. The goal is to make their platform more social, useful, and immersive [1], [4].",
+      "model": "mistral",
+      "question": "What does Meta say about AI infrastructure investment?",
+      "metrics": {
+        "ttft_ms": 199.1,
+        "tpot_ms": 31.6,
+        "total_time_s": 3.61,
+        "tokens": 109,
+        "input_tokens": 759,
+        "throughput_tps": 30.2
+      },
+      "contexts": [
+        {
+          "src": "META_00013268_10K.txt",
+          "text": "the metaverse is in the very early stages of its development, we believe it will become the next computing platform and the future of social interaction. Across our work, we are innovating in artifici"
+        },
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "influenced by a number of factors, including: Expanded AI Offerings in our Products and Services: The continuing evolution of the online world has contributed to the growth of our business. We expect "
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "We are also making significant investments in artificial intelligence (AI) initiatives across our business. For example, we continue to launch new AI features on our products, including support for ne"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "rather an entire ecosystem of experiences, devices, and new technologies powered by AI. While the metaverse is in the very early stages of its development, we believe it will become the next computing"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "other monetary penalties in connection with legal and regulatory developments that may be material to our business. We have made significant investments in AI initiatives, including investments in inf"
+        }
+      ]
+    },
+    {
+      "answer": " Google's advertising revenue increased from $264,590 million in 2024 to $294,691 million in 2025, as stated in [1]. This data represents click-driven revenues, which are a key component of Google's advertising business. However, it's important to note that past performance may not be indicative of future results, as stated in [1]. For more detailed information about Google's financial statements, refer to the 10-K filing GOOGL_00016520_10K.txt.",
+      "model": "mistral",
+      "question": "How has Google's advertising revenue changed over 3 years?",
+      "metrics": {
+        "ttft_ms": 239.5,
+        "tpot_ms": 31.7,
+        "total_time_s": 4.39,
+        "tokens": 132,
+        "input_tokens": 947,
+        "throughput_tps": 30.1
+      },
+      "contexts": [
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "operations, and financial results. Our past results may not be indicative of our future performance, and our financial results may differ materially from historical trends. Financial Results Revenues "
+        },
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "defined as click-driven revenues divided by our total number of paid clicks and represents the average amount we charge advertisers for each engagement by users. Impressions include impressions displa"
+        },
+        {
+          "src": "GOOGL_00016520_10K.txt",
+          "text": "in-app purchases, and devices. Basis of Consolidation The consolidated financial statements of Alphabet include the accounts of Alphabet and entities consolidated under the variable interest and votin"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "of most servers and network assets to 5.5 years, effective January 1, 2025. Based on the servers and network assets placed in service as of December 31, 2024, the financial impact of this change in es"
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "user engagement, and ability to deliver ad impressions may decrease, we may become less attractive to developers and marketers, and our revenue and results of operations may be materially and adversel"
+        }
+      ]
+    },
+    {
+      "answer": " Amazon discloses the risk of data loss or other security incidents as a significant cybersecurity risk. [1] They have a Security Committee, comprised of independent directors, overseeing their cybersecurity infrastructure and compliance with data protection and security regulations. [2] The chief security officer, with extensive experience in the technology and cybersecurity industries, heads the team. They also engage third parties to assist with assessing, identifying, and managing cybersecurity risks. [4] The risks and associated mitigations are evaluated by senior leadership. [1], [4]",
+      "model": "mistral",
+      "question": "What cybersecurity risks does Amazon disclose?",
+      "metrics": {
+        "ttft_ms": 228.0,
+        "tpot_ms": 31.6,
+        "total_time_s": 3.87,
+        "tokens": 116,
+        "input_tokens": 851,
+        "throughput_tps": 30.0
+      },
+      "contexts": [
+        {
+          "src": "AMZN_00010187_10K.txt",
+          "text": "we face is discussed in Item 1A of Part I, &#8220;Risk Factors,&#8221; under the heading &#8220;We Could Be Harmed by Data Loss or Other Security Incidents,&#8221; which should be read in conjunction "
+        },
+        {
+          "src": "AMZN_00010187_10K.txt",
+          "text": "security regulations, and related risks. The Security Committee receives reports regarding such risks from management, including our chief security officer, and reports to the Board at least annually."
+        },
+        {
+          "src": "META_00016282_10K.txt",
+          "text": "breaches that may impact our data. Our board of directors has oversight of our strategic and business risk management and has delegated cybersecurity risk management oversight to the Audit Privacy Com"
+        },
+        {
+          "src": "AMZN_00010187_10K.txt",
+          "text": "trained cybersecurity professionals. In addition to our extensive in-house cybersecurity capabilities, at times we also engage assessors, consultants, auditors, or other third parties to assist with a"
+        },
+        {
+          "src": "META_00013268_10K.txt",
+          "text": "{ e.nextSibling.style.display='block'; } else { e.nextSibling.style.display='none'; } } v3.24.4 Cybersecurity Risk Management and Strategy Disclosure 12 Months Ended Dec. 31, 2024 Cybersecurity Risk M"
+        }
+      ]
+    }
+  ]
+}
