@@ -17,6 +17,7 @@ image = (
         "datasets",
         "numpy",
         "requests",
+        "httpx",
     )
 )
 
@@ -384,26 +385,55 @@ class RAGEngine:
 
     @modal.enter()
     def load(self):
+        import subprocess
+        import requests as req
         import faiss
         import numpy as np
-        from vllm import LLM
         from sentence_transformers import SentenceTransformer
 
         volume.reload()
 
         model_id = MODELS[self.model_name]
-        print(f"Loading {model_id}...")
+        print(f"Starting vLLM server for {model_id} (benchmark mode)...")
 
-        self.llm = LLM(
-            model=model_id,
-            dtype="half",
-            max_model_len=2048,
-            gpu_memory_utilization=0.88,
+        self.proc = subprocess.Popen(
+            [
+                "vllm", "serve", model_id,
+                "--dtype", "half",
+                "--max-model-len", "2048",
+                "--gpu-memory-utilization", "0.88",
+                "--port", "8000",
+            ],
         )
-        self.embedder = SentenceTransformer("BAAI/bge-small-en-v1.5")
-        self.index = faiss.read_index(str(INDEX_PATH))
-        self.meta  = np.load(str(META_PATH), allow_pickle=True).tolist()
+
+        # Poll until healthy (up to 10 minutes)
+        for _ in range(120):
+            try:
+                r = req.get("http://localhost:8000/health", timeout=2)
+                if r.status_code == 200:
+                    print("vLLM server is ready!")
+                    break
+            except Exception:
+                pass
+            time.sleep(5)
+        else:
+            raise RuntimeError("vLLM server did not become healthy in time")
+
+        self.embedder  = SentenceTransformer("BAAI/bge-small-en-v1.5")
+        self.index     = faiss.read_index(str(INDEX_PATH))
+        self.meta      = np.load(str(META_PATH), allow_pickle=True).tolist()
+        self.model_id  = model_id
+        self.vllm_url  = "http://localhost:8000/v1/chat/completions"
         print(f"Ready! Index has {self.index.ntotal} chunks")
+
+    @modal.exit()
+    def unload(self):
+        if hasattr(self, "proc") and self.proc:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=10)
+            except Exception:
+                self.proc.kill()
 
     def retrieve(self, question, k=5):
         vec = self.embedder.encode(
@@ -429,37 +459,79 @@ Answer:"""
 
     @modal.method()
     def query(self, question: str, k: int = 5, max_tokens: int = 400):
-        from vllm import SamplingParams
+        import httpx
+        import json
 
         contexts = self.retrieve(question, k=k)
         prompt   = self.build_prompt(question, contexts)
-        params   = SamplingParams(temperature=0.0, max_tokens=max_tokens)
 
-        t0      = time.perf_counter()
-        outputs = self.llm.generate([prompt], params)
-        t_end   = time.perf_counter()
+        payload = {
+            "model":          self.model_id,
+            "messages":       [{"role": "user", "content": prompt}],
+            "max_tokens":     max_tokens,
+            "temperature":    0.0,
+            "stream":         True,
+            "stream_options": {"include_usage": True},
+        }
 
-        output       = outputs[0]
-        n_tokens     = len(output.outputs[0].token_ids)
-        input_tokens = len(output.prompt_token_ids)
-        total_time   = t_end - t0
+        t0            = time.perf_counter()
+        t_first_token = None
+        n_tokens      = 0
+        input_tokens  = 0
+        answer_parts  = []
 
-        # TTFT estimated (library mode — not real wall-clock)
-        prefill_tps = input_tokens / total_time * 3
-        ttft        = input_tokens / prefill_tps
-        tpot        = (total_time - ttft) / max(n_tokens - 1, 1)
+        with httpx.Client(timeout=120.0) as client:
+            with client.stream("POST", self.vllm_url, json=payload) as response:
+                for raw_line in response.iter_lines():
+                    if not raw_line or not raw_line.startswith("data: "):
+                        continue
+                    data = raw_line[6:]
+                    if data == "[DONE]":
+                        break
+
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+
+                    usage = chunk.get("usage")
+                    if usage:
+                        input_tokens = usage.get("prompt_tokens", input_tokens)
+                        n_tokens     = usage.get("completion_tokens", n_tokens)
+
+                    choices = chunk.get("choices")
+                    if choices:
+                        content = choices[0].get("delta", {}).get("content", "")
+                        if content:
+                            if t_first_token is None:
+                                t_first_token = time.perf_counter()
+                            answer_parts.append(content)
+                            if not usage:
+                                n_tokens += 1
+
+        t_end      = time.perf_counter()
+        total_time = t_end - t0
+
+        ttft_ms = (
+            round((t_first_token - t0) * 1000, 1)
+            if t_first_token is not None
+            else round(total_time * 1000, 1)
+        )
+        decode_time    = max(total_time - ttft_ms / 1000, 0.001)
+        tpot_ms        = round(decode_time / max(n_tokens - 1, 1) * 1000, 1)
+        throughput_tps = round(n_tokens / total_time, 1) if total_time > 0 else 0.0
 
         return {
-            "answer":   output.outputs[0].text,
+            "answer":   "".join(answer_parts),
             "model":    self.model_name,
             "question": question,
             "metrics": {
-                "ttft_ms":        round(ttft * 1000, 1),
-                "tpot_ms":        round(tpot * 1000, 1),
+                "ttft_ms":        ttft_ms,
+                "tpot_ms":        tpot_ms,
                 "total_time_s":   round(total_time, 2),
                 "tokens":         n_tokens,
                 "input_tokens":   input_tokens,
-                "throughput_tps": round(n_tokens / total_time, 1),
+                "throughput_tps": throughput_tps,
             },
             "contexts": [{"src": c["src"], "text": c["text"][:200]} for c in contexts],
         }
