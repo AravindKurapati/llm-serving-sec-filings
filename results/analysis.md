@@ -117,7 +117,7 @@ For latency-sensitive applications (real-time chat, streaming):
 
 ## Limitations
 
-- TTFT measurement is estimated (batch `generate()` doesn't expose streaming token times)
 - Only 5 questions — not statistically robust
 - RAGAS proxy models differ from vLLM-served models (see caveat above — Mistral proxy is a different model family)
 - Single-request benchmarking — concurrent request behavior not measured
+- TTFT p95 is sensitive to KV cache warmup state: the first request after a cold start carries full prefill latency (800–1,200ms); subsequent requests with a warm prefix cache drop to ~200–240ms. p95 on a 5-question run captures the cold-start outlier, not steady-state latency.
