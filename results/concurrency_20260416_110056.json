@@ -1,0 +1,110 @@
+{
+  "timestamp": "20260416_110056",
+  "question": "What are the main financial risks disclosed in these SEC filings?",
+  "concurrency_levels": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "results": {
+    "llama": {
+      "url": "https://akasharshininyu--finsight-llama-stream.modal.run/v1/stream",
+      "levels": [
+        {
+          "concurrency": 1,
+          "wall_time_s": 5.32,
+          "requests_per_sec": 0.188,
+          "median_latency_ms": 4779.5,
+          "p95_latency_ms": 4779.5,
+          "median_ttft_ms": 518.6,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        },
+        {
+          "concurrency": 2,
+          "wall_time_s": 9.93,
+          "requests_per_sec": 0.201,
+          "median_latency_ms": 7098.4,
+          "p95_latency_ms": 9423.6,
+          "median_ttft_ms": 2869.9,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        },
+        {
+          "concurrency": 4,
+          "wall_time_s": 25.17,
+          "requests_per_sec": 0.159,
+          "median_latency_ms": 17759.0,
+          "p95_latency_ms": 24647.9,
+          "median_ttft_ms": 15468.9,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        },
+        {
+          "concurrency": 8,
+          "wall_time_s": 37.88,
+          "requests_per_sec": 0.211,
+          "median_latency_ms": 20835.7,
+          "p95_latency_ms": 36808.4,
+          "median_ttft_ms": 16604.5,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        }
+      ]
+    },
+    "mistral": {
+      "url": "https://akasharshininyu--finsight-mistral-stream.modal.run/v1/stream",
+      "levels": [
+        {
+          "concurrency": 1,
+          "wall_time_s": 7.11,
+          "requests_per_sec": 0.141,
+          "median_latency_ms": 6588.1,
+          "p95_latency_ms": 6588.1,
+          "median_ttft_ms": 791.1,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        },
+        {
+          "concurrency": 2,
+          "wall_time_s": 13.73,
+          "requests_per_sec": 0.146,
+          "median_latency_ms": 9900.8,
+          "p95_latency_ms": 13219.2,
+          "median_ttft_ms": 4093.0,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        },
+        {
+          "concurrency": 4,
+          "wall_time_s": 26.81,
+          "requests_per_sec": 0.149,
+          "median_latency_ms": 16571.7,
+          "p95_latency_ms": 26061.0,
+          "median_ttft_ms": 10760.1,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        },
+        {
+          "concurrency": 8,
+          "wall_time_s": 50.26,
+          "requests_per_sec": 0.159,
+          "median_latency_ms": 28012.0,
+          "p95_latency_ms": 49423.8,
+          "median_ttft_ms": 22183.3,
+          "error_rate": 0.0,
+          "n_errors": 0,
+          "error_samples": []
+        }
+      ]
+    }
+  }
+}

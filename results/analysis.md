@@ -136,6 +136,50 @@ The groundedness score of 0.86 indicates answers are largely grounded in retriev
 
 ---
 
+## Concurrency & Throughput Under Load
+
+> Measured with `scripts/concurrency_test.py` against live Modal A10G endpoints.  
+> Each concurrency level fires N simultaneous POST `/v1/stream` requests and drains the full SSE stream.  
+> Raw results: `results/concurrency_20260416_110056.json`
+
+**Question asked**: *"What are the main financial risks disclosed in these SEC filings?"*
+
+### LLaMA 3.1 8B
+
+| Concurrency | req/s | med_lat_ms | p95_lat_ms | med_ttft_ms | error_rate |
+|:-----------:|------:|-----------:|-----------:|------------:|:----------:|
+| 1 | 0.19 | 4,780 | 4,780 | 519 | 0.00 |
+| 2 | 0.20 | 7,098 | 9,424 | 2,870 | 0.00 |
+| 4 | 0.16 | 17,759 | 24,648 | 15,469 | 0.00 |
+| 8 | 0.21 | 20,836 | 36,808 | 16,605 | 0.00 |
+
+### Mistral 7B
+
+| Concurrency | req/s | med_lat_ms | p95_lat_ms | med_ttft_ms | error_rate |
+|:-----------:|------:|-----------:|-----------:|------------:|:----------:|
+| 1 | 0.14 | 6,588 | 6,588 | 791 | 0.00 |
+| 2 | 0.15 | 9,901 | 13,219 | 4,093 | 0.00 |
+| 4 | 0.15 | 16,572 | 26,061 | 10,760 | 0.00 |
+| 8 | 0.16 | 28,012 | 49,424 | 22,183 | 0.00 |
+
+### Key Findings
+
+**Throughput is essentially flat regardless of concurrency** — both models stay between 0.14–0.21 req/s across all levels. This confirms the single A10G GPU is the bottleneck: vLLM processes requests sequentially (one at a time), so adding concurrent callers just queues them rather than increasing throughput.
+
+**Latency grows near-linearly with queue depth:**
+- LLaMA: 4.8s at c=1 → 20.8s at c=8 (4.4× degradation)
+- Mistral: 6.6s at c=1 → 28.0s at c=8 (4.2× degradation)
+
+**LLaMA has lower single-request latency** (4.8s vs 6.6s at c=1), consistent with its faster TTFT at low load (519ms vs 791ms). However, both models converge on ~0.20 req/s throughput ceiling, which is set by the GPU — not the model.
+
+**TTFT degrades sharply under load** — at c=8, LLaMA TTFT climbs from 519ms to 16,605ms (32×) and Mistral from 791ms to 22,183ms (28×). Every queued request must wait for all preceding requests to complete their prefill before the GPU is available.
+
+**Zero errors at all concurrency levels** — Modal's request queuing absorbs the load correctly; no requests were dropped.
+
+**Implication**: For multi-user scenarios, horizontal scaling (multiple Modal containers) is required. A single A10G instance should be treated as a single-lane pipeline: fine for one user, increasingly painful beyond that.
+
+---
+
 ## Context Length Sensitivity
 
 > **Status**: Script ready — `scripts/context_sensitivity_test.py`. Run when TPD resets.
