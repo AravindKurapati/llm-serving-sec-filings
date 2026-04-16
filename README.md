@@ -18,7 +18,7 @@ This project started as a Kaggle notebook and evolved into a production Modal de
 
 ## Results
 
-Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens. TTFT measured as real wall-clock time to first SSE token via vLLM server mode — not estimated.
+Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens. TTFT measured as real wall-clock time to first SSE token via vLLM server mode (not estimated).
 
 | Metric | LLaMA 3.1 8B | Mistral 7B |
 |--------|-------------|------------|
@@ -27,9 +27,9 @@ Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens. TTFT measured as
 | TPOT p50 | 34.3ms | 31.6ms |
 | Throughput avg | 27.6 tok/s | 29.5 tok/s |
 
-**Key finding**: On A10G hardware these two models are infrastructure-equivalent — TTFT p50 is within 42ms of each other (~200ms both), and throughput is within 7%. The real differentiator is **output quality**: Mistral produces concise, well-structured answers that stop naturally; LLaMA tends toward verbosity and citation-repetition artifacts at the token limit. Choose based on answer quality requirements, not latency.
+**Key finding**: On A10G hardware these two models are infrastructure-equivalent. TTFT p50 is within 42ms of each other (~200ms both) and throughput is within 7%. The real differentiator is output quality: Mistral produces concise, well-structured answers that stop naturally; LLaMA tends toward verbosity and citation-repetition artifacts at the token limit. Choose based on answer quality requirements, not latency.
 
-Note: p95 TTFT reflects the cold KV-cache first request. Warm-cache requests settle at ~200–240ms for both models.
+Note: p95 TTFT reflects the cold KV-cache first request. Warm-cache requests settle at ~200-240ms for both models.
 
 Full results: [`results/benchmark_20260415_190523.json`](results/benchmark_20260415_190523.json)
 
@@ -96,12 +96,17 @@ modal deploy finsight.py
 # https://your-workspace--finsight-api-query.modal.run
 ```
 
-### Run Streamlit Frontend
+### Run the Frontend
 
 ```bash
-# Paste your Modal URL into app.py's MODAL_URL variable first
-pip install streamlit requests
-streamlit run v2_modal/app.py
+# Add your deployed URLs to .env first:
+# MODAL_LLAMA_URL=https://your-workspace--finsight-llama-stream.modal.run
+# MODAL_MISTRAL_URL=https://your-workspace--finsight-mistral-stream.modal.run
+
+cd frontend
+npm install
+npm run dev
+# Opens at http://localhost:5173
 ```
 
 ---
@@ -118,21 +123,25 @@ Short version: Kaggle's T4 GPUs are sm_75. Modern vLLM (0.6+) requires FlashInfe
 
 ```
 User
- └─ React frontend (runs locally, npm run dev)
+ └─ React frontend (Vite, runs locally)
      └─ POST /v1/stream (Modal public URL, SSE)
-         └─ FastAPI streaming proxy (Modal, CPU)
-             └─ VLLMServer.query_stream() (Modal, A10G GPU)
+         └─ FastAPI proxy (Modal, CPU)
+             └─ vLLM serve subprocess (Modal, A10G GPU)
                  ├─ BGE-small embedder → FAISS retrieval
-                 ├─ vllm serve subprocess → /v1/chat/completions
                  └─ LLaMA 3.1 8B or Mistral 7B
                      └─ Modal Volume (persists index + model weights)
 ```
 
-Modal Volumes mean model weights are cached after the first download. Subsequent runs skip the 84-second download and go straight to inference.
+Modal Volumes cache model weights after the first download. Subsequent cold starts skip the download and go straight to inference.
 
 ---
+
 ## Status
-**Ongoing**: Infrastructure benchmarking complete (TTFT, throughput, latency). Currently testing and evaluating output quality using RAGAS. Measuring faithfulness, answer relevancy and context precision on SEC financial QA.
+
+- Infrastructure benchmarking: complete (real TTFT via SSE streaming)
+- Output quality: complete (answer quality analysis + LLM-as-judge eval)
+- Concurrency: complete (stress tested up to 8 concurrent requests)
+- Frontend: React (Vite) replacing Streamlit, in progress
 
 ## Requirements
 
