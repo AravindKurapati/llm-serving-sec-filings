@@ -89,6 +89,53 @@ Mistral output: 217 tokens, 6 clean bullet points, stops naturally
 
 ---
 
+## Output Quality Evaluation
+
+### Answer Quality (`scripts/answer_quality.py`)
+
+> These metrics are computed from **real vLLM outputs** served by the Modal A10G deployment — LLaMA 3.1 8B (`meta-llama/Meta-Llama-3.1-8B-Instruct`) vs actual Mistral 7B (`mistralai/Mistral-7B-Instruct-v0.3`). Source: `results/benchmark_20260415_190523.json`.
+
+| Metric | LLaMA 3.1 8B | Mistral 7B |
+|--------|:------------:|:----------:|
+| token_count (avg) | 114.2 | 87.2 |
+| citation_count (avg) | 5.40 | 4.80 |
+| repetition_score (avg) | 0.0107 | 0.0029 |
+| hits_token_limit (≥390 tokens) | 0 / 5 | 0 / 5 |
+
+**Per-question breakdown:**
+
+| Q# | Question | LLaMA tokens | Mistral tokens | LLaMA rep. | Mistral rep. |
+|----|----------|:------------:|:--------------:|:----------:|:------------:|
+| Q1 | Apple supply chain risks | 172 | 137 | 0.0000 | 0.0000 |
+| Q2 | Microsoft cloud revenue growth | 103 | 73 | 0.0101 | 0.0145 |
+| Q3 | Meta AI infrastructure investment | 114 | 79 | 0.0000 | 0.0000 |
+| Q4 | Google advertising revenue | 39 | 65 | 0.0000 | 0.0000 |
+| Q5 | **Amazon cybersecurity risks** | 143 | 82 | **0.0432** | 0.0000 |
+
+**Key findings:**
+- LLaMA is **31% more verbose** on average (114.2 vs 87.2 tokens)
+- LLaMA has a **3.7× higher repetition score** (0.0107 vs 0.0029) — consistent with the citation-repetition artifact observed qualitatively
+- **Q5 (Amazon cybersecurity) is the worst case**: LLaMA's repetition score of 0.043 is the highest across all questions; Mistral scores 0.000 on the same question, suggesting LLaMA recycles phrasing around "cybersecurity risks" and "senior leadership" in a way Mistral avoids
+- Neither model hit the 390-token limit in this benchmark run — the token-limit artifact seen in earlier qualitative observation may be more prevalent on longer or more open-ended questions
+
+---
+
+### LLM-as-Judge (`scripts/llm_judge.py`)
+
+> **Caveat**: Both "LLaMA" and "Mistral" entries below use the same Groq proxy model (`llama-3.1-8b-instant`) because Mixtral was decommissioned on Groq. Scores are **identical by design** and should not be used to compare the two models. The table is included for completeness only. For actual model comparison, use the `answer_quality.py` metrics above, which are derived from real vLLM outputs.
+
+Evaluated on the 5 qualitative questions (supply chain, cybersecurity, antitrust, workforce, privacy risks). Judge model: Groq `llama-3.3-70b-versatile`.
+
+| Metric | LLaMA 3.1 8B | Mistral proxy |
+|--------|:------------:|:-------------:|
+| groundedness | 0.86 | 0.86 |
+| conciseness | 0.74 | 0.74 |
+| citation_quality | 0.80 | 0.80 |
+
+The groundedness score of 0.86 indicates answers are largely grounded in retrieved context. The conciseness score of 0.74 is the weakest dimension — the Amazon workforce question dragged it down (0.60), consistent with the high token count and repetition score observed in answer_quality.py for that same question.
+
+---
+
 ## Context Length Sensitivity
 
 > **Status**: Script ready — `scripts/context_sensitivity_test.py`. Run when TPD resets.

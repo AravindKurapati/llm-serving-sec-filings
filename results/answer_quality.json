@@ -1,0 +1,101 @@
+{
+  "source_benchmark": "benchmark_20260415_190523.json",
+  "token_limit": 390,
+  "ngram_size": 5,
+  "questions": [
+    {
+      "question_index": 0,
+      "question": "What are Apple's main supply chain risks?",
+      "llama": {
+        "token_count": 172,
+        "citation_count": 7,
+        "repetition_score": 0.0,
+        "hits_token_limit": false
+      },
+      "mistral": {
+        "token_count": 137,
+        "citation_count": 10,
+        "repetition_score": 0.0,
+        "hits_token_limit": false
+      }
+    },
+    {
+      "question_index": 1,
+      "question": "How does Microsoft describe its cloud revenue growth?",
+      "llama": {
+        "token_count": 103,
+        "citation_count": 7,
+        "repetition_score": 0.0101,
+        "hits_token_limit": false
+      },
+      "mistral": {
+        "token_count": 73,
+        "citation_count": 1,
+        "repetition_score": 0.0145,
+        "hits_token_limit": false
+      }
+    },
+    {
+      "question_index": 2,
+      "question": "What does Meta say about AI infrastructure investment?",
+      "llama": {
+        "token_count": 114,
+        "citation_count": 5,
+        "repetition_score": 0.0,
+        "hits_token_limit": false
+      },
+      "mistral": {
+        "token_count": 79,
+        "citation_count": 6,
+        "repetition_score": 0.0,
+        "hits_token_limit": false
+      }
+    },
+    {
+      "question_index": 3,
+      "question": "How has Google's advertising revenue changed over 3 years?",
+      "llama": {
+        "token_count": 39,
+        "citation_count": 1,
+        "repetition_score": 0.0,
+        "hits_token_limit": false
+      },
+      "mistral": {
+        "token_count": 65,
+        "citation_count": 2,
+        "repetition_score": 0.0,
+        "hits_token_limit": false
+      }
+    },
+    {
+      "question_index": 4,
+      "question": "What cybersecurity risks does Amazon disclose?",
+      "llama": {
+        "token_count": 143,
+        "citation_count": 7,
+        "repetition_score": 0.0432,
+        "hits_token_limit": false
+      },
+      "mistral": {
+        "token_count": 82,
+        "citation_count": 5,
+        "repetition_score": 0.0,
+        "hits_token_limit": false
+      }
+    }
+  ],
+  "averages": {
+    "llama": {
+      "token_count": 114.2,
+      "citation_count": 5.4,
+      "repetition_score": 0.0107,
+      "hits_token_limit": 0
+    },
+    "mistral": {
+      "token_count": 87.2,
+      "citation_count": 4.8,
+      "repetition_score": 0.0029,
+      "hits_token_limit": 0
+    }
+  }
+}
