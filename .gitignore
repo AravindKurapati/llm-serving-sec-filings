@@ -3,6 +3,8 @@
 __pycache__/
 *.pyc
 *.pyo
+*.log
+*.txt
 data/index/
 results/ragas_eval_*.json
 
