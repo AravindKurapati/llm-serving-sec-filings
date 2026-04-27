@@ -1,171 +1,157 @@
-// Hardcoded benchmark data from results/analysis.md
-// Hardware: Modal A10G — 5 questions, 15 SEC 10-K filings
-const INFRA = {
-  ttft_p50:  { llama: 4616, mistral: 1015, max: 4616 },
-  ttft_p95:  { llama: 4631, mistral: 2402, max: 4631 },
-  tpot_p50:  { llama: '23.1ms', mistral: '23.5ms' },
-  throughput: { llama: '28.9 t/s', mistral: '28.6 t/s' },
+import { Activity, BarChart3, CheckCircle2, Gauge, Layers, LineChart, Scale, Zap } from 'lucide-react'
+
+const BENCHMARKS = [
+  { label: 'TTFT p50', unit: 'ms', lowerBetter: true, llama: 198.3, mistral: 239.5 },
+  { label: 'TTFT p95', unit: 'ms', lowerBetter: true, llama: 882.4, mistral: 1225.1 },
+  { label: 'TPOT p50', unit: 'ms', lowerBetter: true, llama: 34.3, mistral: 31.6 },
+  { label: 'Throughput avg', unit: 'tok/s', lowerBetter: false, llama: 27.6, mistral: 29.5 },
+]
+
+const QUALITY = [
+  { label: 'Avg tokens', unit: '', lowerBetter: true, llama: 114.2, mistral: 87.2 },
+  { label: 'Avg citations', unit: '', lowerBetter: false, llama: 5.4, mistral: 4.8 },
+  { label: 'Repetition score', unit: '', lowerBetter: true, llama: 0.0107, mistral: 0.0029, precision: 4 },
+]
+
+const CONCURRENCY = [
+  { level: 1, llama: '4.8s', mistral: '6.6s', note: 'single user' },
+  { level: 4, llama: '17.8s', mistral: '16.6s', note: 'queued prefill' },
+  { level: 8, llama: '20.8s', mistral: '28.0s', note: 'single GPU ceiling' },
+]
+
+function formatValue(value, metric) {
+  const precision = metric.precision ?? (Number.isInteger(value) ? 0 : 1)
+  const formatted = typeof value === 'number' ? value.toFixed(precision).replace(/\.0$/, '') : value
+  return metric.unit ? `${formatted} ${metric.unit}` : formatted
 }
 
-// RAGAS scores: pending — update values here when runs complete
-const RAGAS = {
-  llama:   { faithfulness: null, answer_relevancy: null, context_precision: null },
-  mistral: { faithfulness: null, answer_relevancy: null, context_precision: null },
+function winnerFor(metric) {
+  if (metric.llama === metric.mistral) return 'Tie'
+  if (metric.lowerBetter) return metric.llama < metric.mistral ? 'LLaMA' : 'Mistral'
+  return metric.llama > metric.mistral ? 'LLaMA' : 'Mistral'
 }
 
-function BarRow({ model, value, max, isWinner }) {
-  const pct = Math.round((value / max) * 100)
+function CompareRow({ metric }) {
+  const winner = winnerFor(metric)
+  const max = Math.max(metric.llama, metric.mistral)
+  const llamaWidth = Math.max(6, Math.round((metric.llama / max) * 100))
+  const mistralWidth = Math.max(6, Math.round((metric.mistral / max) * 100))
+
   return (
-    <div className="chart-row">
-      <span className={`chart-row__model${isWinner ? ' chart-row__model--winner' : ''}`}>
-        {model}
-      </span>
-      <div className="chart-row__track">
-        <div
-          className={`chart-row__fill chart-row__fill--${isWinner ? 'mistral' : 'llama'}`}
-          style={{ width: `${pct}%` }}
-        />
+    <div className="compare-row">
+      <div className="compare-row__head">
+        <span>{metric.label}</span>
+        <strong>{winner}</strong>
       </div>
-      <span className={`chart-row__value${isWinner ? ' chart-row__value--winner' : ''}`}>
-        {value.toLocaleString()}ms
-      </span>
+      <div className="compare-bars">
+        <div className={`compare-bar${winner === 'LLaMA' ? ' compare-bar--winner' : ''}`}>
+          <span>LLaMA</span>
+          <div><i style={{ width: `${llamaWidth}%` }} /></div>
+          <strong>{formatValue(metric.llama, metric)}</strong>
+        </div>
+        <div className={`compare-bar compare-bar--mistral${winner === 'Mistral' ? ' compare-bar--winner' : ''}`}>
+          <span>Mistral</span>
+          <div><i style={{ width: `${mistralWidth}%` }} /></div>
+          <strong>{formatValue(metric.mistral, metric)}</strong>
+        </div>
+      </div>
     </div>
   )
 }
 
-function RagasCard({ model, modelId, scores }) {
-  const metrics = [
-    { key: 'faithfulness',       label: 'Faithfulness' },
-    { key: 'answer_relevancy',   label: 'Answer Relevancy' },
-    { key: 'context_precision',  label: 'Context Precision' },
-  ]
+function Insight({ icon: Icon, label, value }) {
   return (
-    <div className="ragas-card">
-      <div className="ragas-card__head">
-        <div>
-          <div className="ragas-card__model">{model}</div>
-          <div className="ragas-card__sub">{modelId}</div>
-        </div>
-        <div className="pending-badge">
-          <span className="pending-badge__dot" />
-          Evaluation in progress
-        </div>
-      </div>
-      <div className="ragas-metrics">
-        {metrics.map(({ key, label }) => (
-          <div key={key} className="ragas-metric-row">
-            <span className="ragas-metric-row__name">{label}</span>
-            <span className="ragas-metric-row__value">
-              {scores[key] != null ? scores[key].toFixed(3) : '—'}
-            </span>
-          </div>
-        ))}
-      </div>
+    <div className="insight">
+      <Icon size={18} aria-hidden="true" />
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   )
 }
 
 export function ResultsTab() {
   return (
-    <div className="results-tab">
-      <div className="results-inner">
-
-        {/* Key finding */}
-        <div className="finding-callout">
-          Mistral is 4.5× faster on prefill. Throughput and TPOT are
-          identical — both models are memory-bandwidth bound on A10G.
+    <section className="results-tab" aria-label="Benchmark results">
+      <div className="results-hero">
+        <div>
+          <span className="eyebrow">Live A10G Evidence</span>
+          <h2>Infrastructure is close. Output behavior is the story.</h2>
         </div>
-
-        {/* Infrastructure benchmark */}
-        <div className="results-section">
-          <h2 className="results-section__heading">Latency Benchmark — A10G GPU</h2>
-          <div className="results-card">
-            <div className="chart-area">
-
-              <div className="chart-group">
-                <div className="chart-group__label">TTFT · p50 (lower is faster)</div>
-                <BarRow
-                  model="LLaMA 3.1 8B"
-                  value={INFRA.ttft_p50.llama}
-                  max={INFRA.ttft_p50.max}
-                  isWinner={false}
-                />
-                <BarRow
-                  model="Mistral 7B"
-                  value={INFRA.ttft_p50.mistral}
-                  max={INFRA.ttft_p50.max}
-                  isWinner={true}
-                />
-              </div>
-
-              <div className="chart-group">
-                <div className="chart-group__label">TTFT · p95 tail (lower is faster)</div>
-                <BarRow
-                  model="LLaMA 3.1 8B"
-                  value={INFRA.ttft_p95.llama}
-                  max={INFRA.ttft_p95.max}
-                  isWinner={false}
-                />
-                <BarRow
-                  model="Mistral 7B"
-                  value={INFRA.ttft_p95.mistral}
-                  max={INFRA.ttft_p95.max}
-                  isWinner={true}
-                />
-              </div>
-
-            </div>
-
-            <div className="tie-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Generation metrics</th>
-                    <th>LLaMA 3.1 8B</th>
-                    <th>Mistral 7B</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      TPOT p50
-                      <span className="tie-badge">Tied</span>
-                    </td>
-                    <td>{INFRA.tpot_p50.llama}</td>
-                    <td>{INFRA.tpot_p50.mistral}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Throughput avg
-                      <span className="tie-badge">Tied</span>
-                    </td>
-                    <td>{INFRA.throughput.llama}</td>
-                    <td>{INFRA.throughput.mistral}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div className="results-hero__insights">
+          <Insight icon={Activity} label="Best p50 TTFT" value="198ms" />
+          <Insight icon={Zap} label="Best throughput" value="29.5 tok/s" />
+          <Insight icon={CheckCircle2} label="Error rate under load" value="0%" />
         </div>
-
-        {/* RAGAS quality scores */}
-        <div className="results-section">
-          <h2 className="results-section__heading">RAGAS Evaluation</h2>
-          <div className="ragas-grid">
-            <RagasCard
-              model="LLaMA 3.1 8B"
-              modelId="meta-llama/Meta-Llama-3.1-8B-Instruct"
-              scores={RAGAS.llama}
-            />
-            <RagasCard
-              model="Mistral 7B"
-              modelId="mistralai/Mistral-7B-Instruct-v0.3"
-              scores={RAGAS.mistral}
-            />
-          </div>
-        </div>
-
       </div>
-    </div>
+
+      <div className="results-grid">
+        <section className="result-panel result-panel--wide">
+          <div className="section-title">
+            <BarChart3 size={18} aria-hidden="true" />
+            <h3>Latency And Throughput</h3>
+          </div>
+          <div className="compare-stack">
+            {BENCHMARKS.map(metric => (
+              <CompareRow key={metric.label} metric={metric} />
+            ))}
+          </div>
+        </section>
+
+        <section className="result-panel">
+          <div className="section-title">
+            <Scale size={18} aria-hidden="true" />
+            <h3>Answer Quality</h3>
+          </div>
+          <div className="quality-stack">
+            {QUALITY.map(metric => (
+              <CompareRow key={metric.label} metric={metric} />
+            ))}
+          </div>
+        </section>
+
+        <section className="result-panel">
+          <div className="section-title">
+            <Gauge size={18} aria-hidden="true" />
+            <h3>Load Behavior</h3>
+          </div>
+          <div className="load-table">
+            <div className="load-table__head">
+              <span>Users</span>
+              <span>LLaMA</span>
+              <span>Mistral</span>
+            </div>
+            {CONCURRENCY.map(row => (
+              <div className="load-table__row" key={row.level}>
+                <span>{row.level}x</span>
+                <strong>{row.llama}</strong>
+                <strong>{row.mistral}</strong>
+                <em>{row.note}</em>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="result-panel result-panel--wide">
+          <div className="section-title">
+            <Layers size={18} aria-hidden="true" />
+            <h3>Backend Upgrade Path</h3>
+          </div>
+          <div className="backend-list">
+            <div>
+              <LineChart size={17} aria-hidden="true" />
+              <span>Expose queue depth and cold-start state in the metrics SSE event.</span>
+            </div>
+            <div>
+              <LineChart size={17} aria-hidden="true" />
+              <span>Add reranking after FAISS retrieval for cleaner citations at lower k.</span>
+            </div>
+            <div>
+              <LineChart size={17} aria-hidden="true" />
+              <span>Scale Modal GPU containers horizontally for concurrent users.</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
   )
 }

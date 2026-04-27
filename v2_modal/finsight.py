@@ -188,11 +188,16 @@ class VLLMServer:
                 self.proc.kill()
 
     def retrieve(self, question: str, k: int = 5):
+        try:
+            requested_k = int(k)
+        except (TypeError, ValueError):
+            requested_k = 5
+        k = max(1, min(requested_k, min(10, self.index.ntotal)))
         vec = self.embedder.encode(
             [question], normalize_embeddings=True, convert_to_numpy=True
         ).astype("float32")
         _, ids = self.index.search(vec, k)
-        return [self.meta[i] for i in ids[0]]
+        return [self.meta[i] for i in ids[0] if i >= 0]
 
     SYSTEM_PROMPTS = {
         "concise": (
@@ -250,7 +255,14 @@ class VLLMServer:
         n_tokens     = 0
         input_tokens = 0
 
-        response = req.post(vllm_url, json=payload, stream=True)
+        try:
+            response = req.post(vllm_url, json=payload, stream=True, timeout=(10, 180))
+            response.raise_for_status()
+        except Exception as exc:
+            error = {"type": "error", "message": f"vLLM upstream error: {exc}"}
+            yield f"data: {json.dumps(error)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
 
         for raw_line in response.iter_lines():
             if not raw_line:
@@ -314,7 +326,7 @@ class VLLMServer:
 # Two lightweight CPU endpoints — each proxies SSE from VLLMServer.
 # CORS middleware is required for browser fetch() from the React dev server.
 def _make_streaming_app(model_name: str):
-    from fastapi import FastAPI, Request
+    from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import StreamingResponse
 
@@ -326,12 +338,24 @@ def _make_streaming_app(model_name: str):
         allow_headers=["Content-Type"],
     )
 
+    def bounded_int(value, default: int, low: int, high: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return max(low, min(parsed, high))
+
     @web_app.post("/v1/stream")
     async def stream_endpoint(item: dict):
-        question   = item.get("question", "")
-        k          = int(item.get("k", 5))
-        max_tokens = int(item.get("max_tokens", 400))
-        mode       = item.get("mode", "concise")
+        question = str(item.get("question", "")).strip()
+        if not question:
+            raise HTTPException(status_code=400, detail="question is required")
+
+        k = bounded_int(item.get("k"), 5, 1, 10)
+        max_tokens = bounded_int(item.get("max_tokens"), 400, 32, 800)
+        mode = item.get("mode", "concise")
+        if mode not in VLLMServer.SYSTEM_PROMPTS:
+            mode = "concise"
 
         server = VLLMServer(model_name=model_name)
         return StreamingResponse(
@@ -436,11 +460,16 @@ class RAGEngine:
                 self.proc.kill()
 
     def retrieve(self, question, k=5):
+        try:
+            requested_k = int(k)
+        except (TypeError, ValueError):
+            requested_k = 5
+        k = max(1, min(requested_k, min(10, self.index.ntotal)))
         vec = self.embedder.encode(
             [question], normalize_embeddings=True, convert_to_numpy=True
         ).astype("float32")
         _, ids = self.index.search(vec, k)
-        return [self.meta[i] for i in ids[0]]
+        return [self.meta[i] for i in ids[0] if i >= 0]
 
     def build_prompt(self, question, contexts):
         formatted = "\n\n".join(
@@ -482,6 +511,7 @@ Answer:"""
 
         with httpx.Client(timeout=120.0) as client:
             with client.stream("POST", self.vllm_url, json=payload) as response:
+                response.raise_for_status()
                 for raw_line in response.iter_lines():
                     if not raw_line or not raw_line.startswith("data: "):
                         continue
