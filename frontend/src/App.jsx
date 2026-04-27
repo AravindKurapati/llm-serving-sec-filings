@@ -1,235 +1,322 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import {
+  Activity,
+  BarChart3,
+  BrainCircuit,
+  Database,
+  Download,
+  FileSearch,
+  MessageSquareText,
+  Send,
+  SlidersHorizontal,
+  Timer,
+} from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
 import { ResultsTab } from './components/ResultsTab'
 import { LLAMA_URL, MISTRAL_URL } from './api'
+import heroImage from './assets/finsight-hero.png'
 
 const SUGGESTIONS = [
   { company: 'AAPL', text: "What are Apple's main supply chain risks?" },
-  { company: 'AAPL', text: "How has Apple's R&D spend changed over 3 years?" },
-  { company: 'MSFT', text: "How does Microsoft describe its cloud revenue growth?" },
-  { company: 'MSFT', text: "What are Microsoft's key risk factors?" },
-  { company: 'GOOGL', text: "How has Google's advertising revenue changed?" },
-  { company: 'GOOGL', text: "What does Alphabet say about AI investment?" },
-  { company: 'AMZN', text: "What cybersecurity risks does Amazon disclose?" },
-  { company: 'AMZN', text: "How does AWS contribute to Amazon's operating income?" },
-  { company: 'META', text: "What does Meta say about AI infrastructure investment?" },
-  { company: 'META', text: "How has Meta's headcount changed after layoffs?" },
+  { company: 'MSFT', text: 'How does Microsoft describe its cloud revenue growth?' },
+  { company: 'GOOGL', text: "How has Google's advertising revenue changed over 3 years?" },
+  { company: 'AMZN', text: 'What cybersecurity risks does Amazon disclose?' },
+  { company: 'META', text: 'What does Meta say about AI infrastructure investment?' },
 ]
 
-export default function App() {
-  const [activeTab, setActiveTab]           = useState('chat')
-  const [question, setQuestion]             = useState('')
-  const [k, setK]                           = useState(5)
-  const [mode, setMode]                     = useState('concise')
-  const [triggerCount, setTriggerCount]     = useState(0)
-  const [input, setInput]                   = useState('')
-  const [llamaMetrics, setLlamaMetrics]     = useState(null)
-  const [mistralMetrics, setMistralMetrics] = useState(null)
-  const [llamaAnswer, setLlamaAnswer]       = useState('')
-  const [mistralAnswer, setMistralAnswer]   = useState('')
+const HERO_STATS = [
+  { label: 'Filings indexed', value: '15', sub: 'AAPL, MSFT, GOOGL, AMZN, META', icon: Database },
+  { label: 'Vector chunks', value: '4,782', sub: 'BGE-small + FAISS', icon: FileSearch },
+  { label: 'Median TTFT', value: '198ms', sub: 'best live run', icon: Timer },
+]
 
-  function submit() {
-    const q = input.trim()
+function MetricTile({ stat }) {
+  const Icon = stat.icon
+  return (
+    <div className="metric-tile">
+      <Icon size={17} aria-hidden="true" />
+      <div>
+        <span className="metric-tile__label">{stat.label}</span>
+        <strong>{stat.value}</strong>
+        <span>{stat.sub}</span>
+      </div>
+    </div>
+  )
+}
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('chat')
+  const [question, setQuestion] = useState('')
+  const [k, setK] = useState(5)
+  const [maxTokens, setMaxTokens] = useState(400)
+  const [mode, setMode] = useState('concise')
+  const [triggerCount, setTriggerCount] = useState(0)
+  const [input, setInput] = useState('')
+  const [llamaMetrics, setLlamaMetrics] = useState(null)
+  const [mistralMetrics, setMistralMetrics] = useState(null)
+  const [llamaAnswer, setLlamaAnswer] = useState('')
+  const [mistralAnswer, setMistralAnswer] = useState('')
+
+  const comparison = useMemo(() => {
+    const llamaTtft = llamaMetrics?.ttft_ms
+    const mistralTtft = mistralMetrics?.ttft_ms
+    const bothReady = llamaTtft != null && mistralTtft != null
+
+    if (!bothReady) {
+      return { bothReady: false, llamaBest: false, mistralBest: false, label: '' }
+    }
+
+    const llamaBest = llamaTtft <= mistralTtft
+    const mistralBest = mistralTtft <= llamaTtft
+    const faster = llamaBest ? 'LLaMA' : 'Mistral'
+    const ratio = llamaBest
+      ? (mistralTtft / Math.max(llamaTtft, 1)).toFixed(1)
+      : (llamaTtft / Math.max(mistralTtft, 1)).toFixed(1)
+
+    return {
+      bothReady,
+      llamaBest,
+      mistralBest,
+      label: `${faster} led first-token latency by ${ratio}x`,
+    }
+  }, [llamaMetrics, mistralMetrics])
+
+  function runQuestion(nextQuestion = input) {
+    const q = nextQuestion.trim()
     if (!q) return
     setQuestion(q)
+    setInput(q)
     setLlamaMetrics(null)
     setMistralMetrics(null)
     setLlamaAnswer('')
     setMistralAnswer('')
     setTriggerCount(c => c + 1)
+    setActiveTab('chat')
   }
 
   function handleKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      submit()
+      runQuestion()
     }
   }
-
-  const llamaTtft   = llamaMetrics?.ttft_ms
-  const mistralTtft = mistralMetrics?.ttft_ms
-  const bothReady   = llamaTtft != null && mistralTtft != null
-  const llamaBest   = bothReady && llamaTtft <= mistralTtft
-  const mistralBest = bothReady && mistralTtft <= llamaTtft
 
   function handleExport() {
     const payload = {
       question,
       timestamp: new Date().toISOString(),
-      k,
+      retrieval_k: k,
+      max_tokens: maxTokens,
       mode,
       llama: {
         answer: llamaAnswer,
-        metrics: llamaMetrics
-          ? {
-              ttft_ms:        llamaMetrics.ttft_ms,
-              tpot_ms:        llamaMetrics.tpot_ms,
-              tokens:         llamaMetrics.tokens,
-              throughput_tps: llamaMetrics.throughput_tps,
-            }
-          : null,
+        metrics: llamaMetrics,
         contexts: llamaMetrics?.contexts ?? [],
       },
       mistral: {
         answer: mistralAnswer,
-        metrics: mistralMetrics
-          ? {
-              ttft_ms:        mistralMetrics.ttft_ms,
-              tpot_ms:        mistralMetrics.tpot_ms,
-              tokens:         mistralMetrics.tokens,
-              throughput_tps: mistralMetrics.throughput_tps,
-            }
-          : null,
+        metrics: mistralMetrics,
         contexts: mistralMetrics?.contexts ?? [],
       },
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
     a.download = `finsight_comparison_${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
 
+  const canExport = Boolean(question && (llamaAnswer || mistralAnswer))
+
   return (
     <div className="app">
-      <header className="header">
-        <h1>FinSight <span className="header__sub">SEC 10-K RAG</span></h1>
+      <header className="topbar">
+        <button className="brand-mark" onClick={() => setActiveTab('chat')} aria-label="Open FinSight chat">
+          <BrainCircuit size={19} aria-hidden="true" />
+          <span>FinSight</span>
+        </button>
+
+        <nav className="nav-tabs" aria-label="Primary views">
+          <button
+            className={`nav-tab${activeTab === 'chat' ? ' nav-tab--active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+          >
+            <MessageSquareText size={16} aria-hidden="true" />
+            <span>Chat</span>
+          </button>
+          <button
+            className={`nav-tab${activeTab === 'results' ? ' nav-tab--active' : ''}`}
+            onClick={() => setActiveTab('results')}
+          >
+            <BarChart3 size={16} aria-hidden="true" />
+            <span>Results</span>
+          </button>
+        </nav>
+
+        <div className="endpoint-status">
+          <Activity size={15} aria-hidden="true" />
+          <span>SSE benchmark rig</span>
+        </div>
       </header>
 
-      <nav className="tab-bar">
-        <button
-          className={`tab-btn${activeTab === 'chat' ? ' tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('chat')}
-        >
-          Chat
-        </button>
-        <button
-          className={`tab-btn${activeTab === 'results' ? ' tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('results')}
-        >
-          Results
-        </button>
-      </nav>
-
-      {activeTab === 'chat' ? (
-        <>
-          <div className="panels">
-            <ChatPanel
-              modelLabel="LLaMA 3.1 8B"
-              modelSub="Meta · 8B params"
-              modalUrl={LLAMA_URL}
-              question={question}
-              k={k}
-              mode={mode}
-              triggerCount={triggerCount}
-              isBest={llamaBest}
-              onMetrics={setLlamaMetrics}
-              onAnswer={setLlamaAnswer}
-            />
-            <ChatPanel
-              modelLabel="Mistral 7B"
-              modelSub="Mistral AI · 7B params"
-              modalUrl={MISTRAL_URL}
-              question={question}
-              k={k}
-              mode={mode}
-              triggerCount={triggerCount}
-              isBest={mistralBest}
-              onMetrics={setMistralMetrics}
-              onAnswer={setMistralAnswer}
-            />
-          </div>
-
-          {bothReady && (
-            <div className="winner-banner">
-              <span>
-                {mistralBest
-                  ? `Mistral was ${(llamaTtft / mistralTtft).toFixed(1)}× faster on first token`
-                  : `LLaMA was ${(mistralTtft / llamaTtft).toFixed(1)}× faster on first token`}
-              </span>
-              <button className="export-btn" onClick={handleExport}>
-                Export JSON
-              </button>
+      <main className="app-main">
+        <section className="hero-stage" aria-labelledby="hero-title">
+          <img className="hero-stage__image" src={heroImage} alt="" />
+          <div className="hero-stage__shade" />
+          <div className="hero-stage__content">
+            <div className="hero-copy">
+              <span className="eyebrow">SEC 10-K RAG Workbench</span>
+              <h1 id="hero-title">FinSight</h1>
+              <p>Dual-model filing analysis with streamed citations, latency evidence, and exportable comparisons.</p>
             </div>
-          )}
-
-          <div className="chat-controls">
-            <div className="k-slider-group">
-              <div className="k-slider-group__header">
-                <label className="k-slider-group__label" htmlFor="k-slider">
-                  Retrieved chunks (k)
-                </label>
-                <span className="k-slider-group__value">{k}</span>
-              </div>
-              <input
-                id="k-slider"
-                className="k-slider"
-                type="range"
-                min={2}
-                max={10}
-                step={1}
-                value={k}
-                onChange={e => setK(Number(e.target.value))}
-              />
-              <span className="k-slider-group__hint">Higher k = more context, slower retrieval.</span>
-            </div>
-
-            <div className="mode-toggle-group">
-              <span className="mode-toggle-group__label">Answer mode</span>
-              <div className="mode-toggle">
-                <button
-                  className={`mode-toggle__btn${mode === 'concise' ? ' mode-toggle__btn--active' : ''}`}
-                  onClick={() => setMode('concise')}
-                >
-                  Concise
-                </button>
-                <button
-                  className={`mode-toggle__btn${mode === 'detailed' ? ' mode-toggle__btn--active' : ''}`}
-                  onClick={() => setMode('detailed')}
-                >
-                  Detailed
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="input-area">
-            <div className="input-row">
-              <textarea
-                className="input-row__textarea"
-                rows={2}
-                placeholder="Ask a question about SEC 10-K filings…"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKey}
-              />
-              <button
-                className="input-row__submit"
-                onClick={submit}
-                disabled={!input.trim()}
-              >
-                Send
-              </button>
-            </div>
-
-            <div className="suggestions">
-              {SUGGESTIONS.map((s, i) => (
-                <button
-                  key={i}
-                  className="suggestion-chip"
-                  onClick={() => setInput(s.text)}
-                >
-                  {s.text}
-                </button>
+            <div className="hero-metrics" aria-label="Project metrics">
+              {HERO_STATS.map(stat => (
+                <MetricTile key={stat.label} stat={stat} />
               ))}
             </div>
           </div>
-        </>
-      ) : (
-        <ResultsTab />
-      )}
+        </section>
+
+        {activeTab === 'chat' ? (
+          <section className="workspace" aria-label="FinSight comparison workspace">
+            <div className="query-console">
+              <div className="query-console__main">
+                <textarea
+                  className="query-console__input"
+                  rows={3}
+                  placeholder="Ask about revenue, risk factors, capex, cloud growth, AI infrastructure, or cybersecurity..."
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKey}
+                />
+                <button
+                  className="send-button"
+                  onClick={() => runQuestion()}
+                  disabled={!input.trim()}
+                  aria-label="Run comparison"
+                >
+                  <Send size={18} aria-hidden="true" />
+                  <span>Run</span>
+                </button>
+              </div>
+
+              <div className="query-console__footer">
+                <div className="quick-prompts" aria-label="Suggested questions">
+                  {SUGGESTIONS.map(s => (
+                    <button
+                      key={`${s.company}-${s.text}`}
+                      className="prompt-chip"
+                      onClick={() => runQuestion(s.text)}
+                    >
+                      <span>{s.company}</span>
+                      {s.text}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="control-strip" aria-label="Query controls">
+                  <div className="range-control">
+                    <div className="control-label">
+                      <SlidersHorizontal size={15} aria-hidden="true" />
+                      <span>k</span>
+                      <strong>{k}</strong>
+                    </div>
+                    <input
+                      className="range-input"
+                      type="range"
+                      min={2}
+                      max={10}
+                      step={1}
+                      value={k}
+                      onChange={e => setK(Number(e.target.value))}
+                      aria-label="Retrieved chunks"
+                    />
+                  </div>
+
+                  <label className="number-control">
+                    <span>Max tokens</span>
+                    <input
+                      type="number"
+                      min={80}
+                      max={800}
+                      step={20}
+                      value={maxTokens}
+                      onChange={e => setMaxTokens(Math.min(800, Math.max(80, Number(e.target.value) || 80)))}
+                    />
+                  </label>
+
+                  <div className="mode-toggle" aria-label="Answer mode">
+                    <button
+                      className={`mode-toggle__btn${mode === 'concise' ? ' mode-toggle__btn--active' : ''}`}
+                      onClick={() => setMode('concise')}
+                    >
+                      Concise
+                    </button>
+                    <button
+                      className={`mode-toggle__btn${mode === 'detailed' ? ' mode-toggle__btn--active' : ''}`}
+                      onClick={() => setMode('detailed')}
+                    >
+                      Detailed
+                    </button>
+                  </div>
+
+                  <button
+                    className="ghost-button"
+                    onClick={handleExport}
+                    disabled={!canExport}
+                    aria-label="Export comparison JSON"
+                  >
+                    <Download size={16} aria-hidden="true" />
+                    <span>Export</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {comparison.bothReady && (
+              <div className="winner-banner">
+                <Activity size={16} aria-hidden="true" />
+                <span>{comparison.label}</span>
+              </div>
+            )}
+
+            <div className="panels">
+              <ChatPanel
+                modelKey="llama"
+                modelLabel="LLaMA 3.1 8B"
+                modelSub="Meta | 8B params"
+                modalUrl={LLAMA_URL}
+                question={question}
+                k={k}
+                maxTokens={maxTokens}
+                mode={mode}
+                triggerCount={triggerCount}
+                isBest={comparison.llamaBest}
+                onMetrics={setLlamaMetrics}
+                onAnswer={setLlamaAnswer}
+              />
+              <ChatPanel
+                modelKey="mistral"
+                modelLabel="Mistral 7B"
+                modelSub="Mistral AI | 7B params"
+                modalUrl={MISTRAL_URL}
+                question={question}
+                k={k}
+                maxTokens={maxTokens}
+                mode={mode}
+                triggerCount={triggerCount}
+                isBest={comparison.mistralBest}
+                onMetrics={setMistralMetrics}
+                onAnswer={setMistralAnswer}
+              />
+            </div>
+          </section>
+        ) : (
+          <ResultsTab />
+        )}
+      </main>
     </div>
   )
 }

@@ -1,23 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
+import { Bot, CheckCircle2, FileSearch, RotateCcw, SignalHigh } from 'lucide-react'
 import { useRichStream } from '../hooks/useRichStream'
 import { MessageBubble } from './MessageBubble'
 import { MetricsBar } from './MetricsBar'
 import { SourceDrawer } from './SourceDrawer'
 
 export function ChatPanel({
-  modelLabel, modelSub, modalUrl,
-  question, k, mode, triggerCount,
-  isBest, onMetrics, onAnswer,
+  modelKey,
+  modelLabel,
+  modelSub,
+  modalUrl,
+  question,
+  k,
+  maxTokens,
+  mode,
+  triggerCount,
+  isBest,
+  onMetrics,
+  onAnswer,
 }) {
   const { stream, isStreaming, answer, metrics, error, reset } = useRichStream(modalUrl)
-
-  // TTFT race timer — useRef + requestAnimationFrame, never setInterval
-  const rafRef        = useRef(null)
-  const startRef      = useRef(null)
+  const rafRef = useRef(null)
+  const startRef = useRef(null)
   const firstTokenRef = useRef(false)
   const [ttftLive, setTtftLive] = useState(null)
 
-  // Start timer + kick stream when a new question is submitted
   useEffect(() => {
     if (triggerCount > 0 && question) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -29,16 +36,16 @@ export function ChatPanel({
         setTtftLive(Math.round(performance.now() - startRef.current))
         rafRef.current = requestAnimationFrame(tick)
       }
-      rafRef.current = requestAnimationFrame(tick)
 
-      stream(question, k, 400, mode)
+      rafRef.current = requestAnimationFrame(tick)
+      stream(question, k, maxTokens, mode)
     }
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [triggerCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Freeze timer on first token
   useEffect(() => {
     if (answer && !firstTokenRef.current && rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current)
@@ -48,12 +55,10 @@ export function ChatPanel({
     }
   }, [answer])
 
-  // Notify parent of final metrics
   useEffect(() => {
     if (metrics) onMetrics?.(metrics)
   }, [metrics]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Notify parent of final answer (when streaming ends)
   useEffect(() => {
     if (!isStreaming && answer) onAnswer?.(answer)
   }, [isStreaming]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -67,35 +72,61 @@ export function ChatPanel({
     setTtftLive(null)
   }
 
+  const status = error ? 'Issue' : isStreaming ? 'Streaming' : answer ? 'Complete' : 'Ready'
+
   return (
-    <div className="panel">
+    <article className={`panel panel--${modelKey}${isBest ? ' panel--best' : ''}`}>
       <div className="panel__header">
-        <div className="panel__model-wrap">
-          <span className="panel__model">{modelLabel}</span>
-          {modelSub && <span className="panel__model-sub">{modelSub}</span>}
+        <div className="panel__identity">
+          <div className="panel__badge">
+            <Bot size={18} aria-hidden="true" />
+          </div>
+          <div className="panel__model-wrap">
+            <h2 className="panel__model">{modelLabel}</h2>
+            {modelSub && <span className="panel__model-sub">{modelSub}</span>}
+          </div>
         </div>
+
+        <div className={`panel__status panel__status--${status.toLowerCase()}`}>
+          {status === 'Complete' ? <CheckCircle2 size={15} aria-hidden="true" /> : <SignalHigh size={15} aria-hidden="true" />}
+          <span>{status}</span>
+        </div>
+
         {(answer || error) && (
-          <button className="panel__reset" onClick={handleReset}>Clear</button>
+          <button className="icon-button" onClick={handleReset} aria-label={`Clear ${modelLabel}`}>
+            <RotateCcw size={16} aria-hidden="true" />
+          </button>
         )}
       </div>
 
       <div className="panel__messages">
-        {question && triggerCount > 0 && (
-          <MessageBubble role="user" content={question} isStreaming={false} />
-        )}
-        {answer && (
-          <MessageBubble role="assistant" content={answer} isStreaming={isStreaming} />
-        )}
-        {isStreaming && !answer && (
-          <div className="panel__thinking">Thinking…</div>
-        )}
-        {error && (
-          <div className="panel__error">Error: {error}</div>
+        {question && triggerCount > 0 ? (
+          <>
+            <MessageBubble role="user" content={question} isStreaming={false} />
+            {answer && (
+              <MessageBubble role="assistant" content={answer} isStreaming={isStreaming} />
+            )}
+            {isStreaming && !answer && (
+              <div className="panel__thinking">
+                <span />
+                Reading filings and preparing the first token
+              </div>
+            )}
+            {error && (
+              <div className="panel__error">Error: {error}</div>
+            )}
+          </>
+        ) : (
+          <div className="panel__empty">
+            <FileSearch className="panel__empty-icon" size={30} aria-hidden="true" />
+            <strong>Ready for filing context</strong>
+            <span>Results will stream here with citations and latency telemetry.</span>
+          </div>
         )}
       </div>
 
       <MetricsBar metrics={metrics} isBest={isBest} ttftLive={ttftLive} />
       <SourceDrawer contexts={metrics?.contexts} />
-    </div>
+    </article>
   )
 }
