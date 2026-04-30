@@ -1,8 +1,10 @@
-# LLM Serving on SEC Filings
+# FinSight
 
 > RAG over real 10-K filings: LLaMA 3.1 8B vs Mistral 7B, benchmarked on A10G via Modal
 
-This project started as a Kaggle notebook and evolved into a production Modal deployment after hitting real infrastructure walls. The repo preserves both versions. (the original attempt and the working solution)
+**[Live Demo →](https://finsight-aru2.vercel.app)**
+
+This project started as a Kaggle notebook and evolved into a production Modal deployment with a deployed React frontend. The repo preserves both the original attempt and the working solution.
 
 ---
 
@@ -12,7 +14,8 @@ This project started as a Kaggle notebook and evolved into a production Modal de
 - Chunks and embeds them with BGE-small into a FAISS index
 - Serves LLaMA 3.1 8B and Mistral 7B via vLLM on Modal A10G GPUs
 - Benchmarks TTFT, TPOT, and throughput for both models
-- Streams tokens to a React frontend via SSE (real TTFT, no blocking)
+- Streams tokens to both model lanes simultaneously via SSE (real TTFT, no blocking)
+- Deployed React frontend with a Command Center UI: cinematic hero, dual-model chat panels, evidence cards, latency board, and retrieval map
 
 ---
 
@@ -46,8 +49,11 @@ llm-serving-sec-filings/
 │
 ├── v2_modal/                   # Working production version
 │   ├── finsight.py             # Modal backend (vLLM + FAISS + FastAPI)
-│   ├── app.py                  # Streamlit frontend
 │   └── README.md
+│
+├── frontend/                   # React + Vite frontend (deployed to Vercel)
+│   ├── src/
+│   └── ...
 │
 ├── results/
 │   ├── benchmark_20260222.json # Raw benchmark output
@@ -96,18 +102,20 @@ modal deploy finsight.py
 # https://your-workspace--finsight-api-query.modal.run
 ```
 
-### Run the Frontend
+### Run the Frontend Locally
 
 ```bash
-# Add your deployed URLs to .env first:
-# MODAL_LLAMA_URL=https://your-workspace--finsight-llama-stream.modal.run
-# MODAL_MISTRAL_URL=https://your-workspace--finsight-mistral-stream.modal.run
+# Add your deployed Modal URLs to frontend/.env:
+# VITE_MODAL_LLAMA_URL=https://your-workspace--finsight-llama-stream.modal.run
+# VITE_MODAL_MISTRAL_URL=https://your-workspace--finsight-mistral-stream.modal.run
 
 cd frontend
 npm install
 npm run dev
 # Opens at http://localhost:5173
 ```
+
+The production frontend is deployed to Vercel at [finsight-aru2.vercel.app](https://finsight-aru2.vercel.app). Vercel auto-deploys on push to `main` — no manual build step needed for frontend updates.
 
 ---
 
@@ -123,8 +131,8 @@ Short version: Kaggle's T4 GPUs are sm_75. Modern vLLM (0.6+) requires FlashInfe
 
 ```
 User
- └─ React frontend (Vite, runs locally)
-     └─ POST /v1/stream (Modal public URL, SSE)
+ └─ React frontend (Vite, deployed on Vercel)
+     └─ POST /v1/stream (Modal public URL, SSE) ─── two parallel lanes
          └─ FastAPI proxy (Modal, CPU)
              └─ vLLM serve subprocess (Modal, A10G GPU)
                  ├─ BGE-small embedder → FAISS retrieval
@@ -141,7 +149,7 @@ Modal Volumes cache model weights after the first download. Subsequent cold star
 - Infrastructure benchmarking: complete (real TTFT via SSE streaming)
 - Output quality: complete (answer quality analysis + LLM-as-judge eval)
 - Concurrency: complete (stress tested up to 8 concurrent requests)
-- Frontend: React (Vite) replacing Streamlit, in progress
+- Frontend: complete — Command Center UI deployed to Vercel
 
 ## Requirements
 
