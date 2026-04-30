@@ -3,18 +3,27 @@ import {
   Activity,
   BarChart3,
   BrainCircuit,
+  Cpu,
   Database,
   Download,
   FileSearch,
+  Layers,
+  LineChart,
   MessageSquareText,
+  Network,
   Send,
+  ShieldCheck,
   SlidersHorizontal,
   Timer,
 } from 'lucide-react'
 import { ChatPanel } from './components/ChatPanel'
 import { ResultsTab } from './components/ResultsTab'
 import { LLAMA_URL, MISTRAL_URL } from './api'
+import benchmarkImage from './assets/finsight-benchmark-dashboard.png'
 import heroImage from './assets/finsight-hero.png'
+import heroVariantImage from './assets/finsight-hero-variant.png'
+import infraImage from './assets/finsight-source-retrieval-infra.png'
+import retrievalImage from './assets/finsight-source-retrieval.png'
 
 const SUGGESTIONS = [
   { company: 'AAPL', text: "What are Apple's main supply chain risks?" },
@@ -30,6 +39,30 @@ const HERO_STATS = [
   { label: 'Median TTFT', value: '198ms', sub: 'best live run', icon: Timer },
 ]
 
+const SYSTEM_CARDS = [
+  {
+    title: 'Retrieval Map',
+    label: 'Grounding layer',
+    meta: 'BGE-small vectors, ranked 10-K context, visible citations',
+    image: retrievalImage,
+    icon: Network,
+  },
+  {
+    title: 'Latency Board',
+    label: 'SSE telemetry',
+    meta: 'TTFT, TPOT, token count, and throughput per model lane',
+    image: benchmarkImage,
+    icon: LineChart,
+  },
+  {
+    title: 'Modal Stack',
+    label: 'Serving path',
+    meta: 'FastAPI proxy, vLLM subprocess, A10G GPU, FAISS volume',
+    image: infraImage,
+    icon: Cpu,
+  },
+]
+
 function MetricTile({ stat }) {
   const Icon = stat.icon
   return (
@@ -41,6 +74,34 @@ function MetricTile({ stat }) {
         <span>{stat.sub}</span>
       </div>
     </div>
+  )
+}
+
+function RuntimePill({ icon: Icon, children }) {
+  return (
+    <span className="runtime-pill">
+      <Icon size={15} aria-hidden="true" />
+      {children}
+    </span>
+  )
+}
+
+function SystemCard({ card }) {
+  const Icon = card.icon
+
+  return (
+    <article className="system-card">
+      <img src={card.image} alt="" />
+      <div className="system-card__shade" />
+      <div className="system-card__body">
+        <span className="system-card__label">
+          <Icon size={15} aria-hidden="true" />
+          {card.label}
+        </span>
+        <strong>{card.title}</strong>
+        <small>{card.meta}</small>
+      </div>
+    </article>
   )
 }
 
@@ -80,6 +141,11 @@ export default function App() {
       label: `${faster} led first-token latency by ${ratio}x`,
     }
   }, [llamaMetrics, mistralMetrics])
+
+  function switchTab(tab) {
+    setActiveTab(tab)
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
 
   function runQuestion(nextQuestion = input) {
     const q = nextQuestion.trim()
@@ -133,7 +199,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <button className="brand-mark" onClick={() => setActiveTab('chat')} aria-label="Open FinSight chat">
+        <button className="brand-mark" onClick={() => switchTab('chat')} aria-label="Open FinSight chat">
           <BrainCircuit size={19} aria-hidden="true" />
           <span>FinSight</span>
         </button>
@@ -141,14 +207,14 @@ export default function App() {
         <nav className="nav-tabs" aria-label="Primary views">
           <button
             className={`nav-tab${activeTab === 'chat' ? ' nav-tab--active' : ''}`}
-            onClick={() => setActiveTab('chat')}
+            onClick={() => switchTab('chat')}
           >
             <MessageSquareText size={16} aria-hidden="true" />
             <span>Chat</span>
           </button>
           <button
             className={`nav-tab${activeTab === 'results' ? ' nav-tab--active' : ''}`}
-            onClick={() => setActiveTab('results')}
+            onClick={() => switchTab('results')}
           >
             <BarChart3 size={16} aria-hidden="true" />
             <span>Results</span>
@@ -167,10 +233,29 @@ export default function App() {
           <div className="hero-stage__shade" />
           <div className="hero-stage__content">
             <div className="hero-copy">
-              <span className="eyebrow">SEC 10-K RAG Workbench</span>
+              <span className="eyebrow">SEC 10-K RAG Command Center</span>
               <h1 id="hero-title">FinSight</h1>
-              <p>Dual-model filing analysis with streamed citations, latency evidence, and exportable comparisons.</p>
+              <p>Dual-model filing intelligence with live citations, first-token telemetry, and exportable evidence from the same prompt.</p>
+              <div className="hero-actions" aria-label="Runtime capabilities">
+                <RuntimePill icon={ShieldCheck}>Cited answers</RuntimePill>
+                <RuntimePill icon={Layers}>Two model lanes</RuntimePill>
+                <RuntimePill icon={Activity}>Live SSE</RuntimePill>
+              </div>
             </div>
+
+            <div className="hero-visual" aria-label="FinSight command preview">
+              <img src={heroVariantImage} alt="" />
+              <div className="hero-visual__scan" />
+              <div className="hero-visual__hud hero-visual__hud--top">
+                <span>Warm-cache p50</span>
+                <strong>198ms</strong>
+              </div>
+              <div className="hero-visual__hud hero-visual__hud--bottom">
+                <span>Indexed corpus</span>
+                <strong>15 filings</strong>
+              </div>
+            </div>
+
             <div className="hero-metrics" aria-label="Project metrics">
               {HERO_STATS.map(stat => (
                 <MetricTile key={stat.label} stat={stat} />
@@ -181,7 +266,24 @@ export default function App() {
 
         {activeTab === 'chat' ? (
           <section className="workspace" aria-label="FinSight comparison workspace">
+            <div className="system-rail" aria-label="FinSight system views">
+              {SYSTEM_CARDS.map(card => (
+                <SystemCard key={card.title} card={card} />
+              ))}
+            </div>
+
             <div className="query-console">
+              <div className="query-console__header">
+                <div>
+                  <span className="section-kicker">Mission query</span>
+                  <strong>Ask once. Watch both models stream.</strong>
+                </div>
+                <span className="console-live">
+                  <Activity size={14} aria-hidden="true" />
+                  Modal endpoints armed
+                </span>
+              </div>
+
               <div className="query-console__main">
                 <textarea
                   className="query-console__input"

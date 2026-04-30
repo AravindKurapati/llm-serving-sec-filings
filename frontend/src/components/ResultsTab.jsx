@@ -1,4 +1,7 @@
-import { Activity, BarChart3, CheckCircle2, Gauge, Layers, LineChart, Scale, Zap } from 'lucide-react'
+import { Activity, BarChart3, CheckCircle2, Cpu, FileSearch, Gauge, Layers, LineChart, Scale, Zap } from 'lucide-react'
+import benchmarkImage from '../assets/finsight-benchmark-dashboard.png'
+import infraImage from '../assets/finsight-source-retrieval-infra.png'
+import retrievalImage from '../assets/finsight-source-retrieval.png'
 
 const BENCHMARKS = [
   { label: 'TTFT p50', unit: 'ms', lowerBetter: true, llama: 198.3, mistral: 239.5 },
@@ -17,6 +20,12 @@ const CONCURRENCY = [
   { level: 1, llama: '4.8s', mistral: '6.6s', note: 'single user' },
   { level: 4, llama: '17.8s', mistral: '16.6s', note: 'queued prefill' },
   { level: 8, llama: '20.8s', mistral: '28.0s', note: 'single GPU ceiling' },
+]
+
+const EVIDENCE_CARDS = [
+  { title: 'Retrieval Trace', label: 'Citation path', image: retrievalImage, icon: FileSearch },
+  { title: 'Benchmark Console', label: 'Latency evidence', image: benchmarkImage, icon: Gauge },
+  { title: 'Serving Topology', label: 'Modal runtime', image: infraImage, icon: Cpu },
 ]
 
 function formatValue(value, metric) {
@@ -69,12 +78,30 @@ function Insight({ icon: Icon, label, value }) {
   )
 }
 
+function EvidenceCard({ card }) {
+  const Icon = card.icon
+
+  return (
+    <article className="evidence-card">
+      <img src={card.image} alt="" />
+      <div className="evidence-card__shade" />
+      <div className="evidence-card__body">
+        <span>
+          <Icon size={15} aria-hidden="true" />
+          {card.label}
+        </span>
+        <strong>{card.title}</strong>
+      </div>
+    </article>
+  )
+}
+
 export function ResultsTab() {
   return (
     <section className="results-tab" aria-label="Benchmark results">
       <div className="results-hero">
         <div>
-          <span className="eyebrow">Live A10G Evidence</span>
+          <span className="eyebrow">Command Evidence</span>
           <h2>Infrastructure is close. Output behavior is the story.</h2>
         </div>
         <div className="results-hero__insights">
@@ -82,6 +109,12 @@ export function ResultsTab() {
           <Insight icon={Zap} label="Best throughput" value="29.5 tok/s" />
           <Insight icon={CheckCircle2} label="Error rate under load" value="0%" />
         </div>
+      </div>
+
+      <div className="evidence-strip" aria-label="Evidence views">
+        {EVIDENCE_CARDS.map(card => (
+          <EvidenceCard key={card.title} card={card} />
+        ))}
       </div>
 
       <div className="results-grid">
