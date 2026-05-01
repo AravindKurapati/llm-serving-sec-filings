@@ -43,6 +43,12 @@ def status_payload() -> dict:
 
 async def _token_stream(question: str, k: int, max_tokens: int):
     tokens_to_send = FAKE_TOKENS[:max_tokens]
+    status = {
+        "type": "status",
+        "stage": "mock_start",
+        "message": "Mock stream connected. Preparing sample filing context.",
+    }
+    yield f"data: {json.dumps(status)}\n\n"
 
     for i, token in enumerate(tokens_to_send):
         chunk = {"choices": [{"delta": {"content": token}}]}

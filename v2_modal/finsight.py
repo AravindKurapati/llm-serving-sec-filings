@@ -160,7 +160,7 @@ def build_index():
     volumes={VOLUME_PATH: volume},
     timeout=600,
     secrets=[modal.Secret.from_name("huggingface-secret")],
-    scaledown_window=120,
+    scaledown_window=600,
 )
 class VLLMServer:
     model_name: str = modal.parameter(default="llama")
@@ -359,6 +359,9 @@ class VLLMServer:
 # Two lightweight CPU endpoints — each proxies SSE from VLLMServer.
 # CORS middleware is required for browser fetch() from the React dev server.
 def _make_streaming_app(model_name: str):
+    import json
+    import queue
+    import threading
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import StreamingResponse
@@ -412,8 +415,48 @@ def _make_streaming_app(model_name: str):
             raise HTTPException(status_code=400, detail="question is required")
 
         server = VLLMServer(model_name=model_name)
+
+        def event_stream():
+            chunks = queue.Queue()
+            done = object()
+
+            def status_event(message: str):
+                status = {"type": "status", "stage": "modal_start", "message": message}
+                return f"data: {json.dumps(status)}\n\n"
+
+            def pump_modal_stream():
+                try:
+                    for chunk in server.query_stream.remote_gen(question, item.k, item.max_tokens, item.mode):
+                        chunks.put(chunk)
+                except Exception as exc:
+                    error = {"type": "error", "message": f"Modal streaming error: {exc}"}
+                    chunks.put(f"data: {json.dumps(error)}\n\n")
+                    chunks.put("data: [DONE]\n\n")
+                finally:
+                    chunks.put(done)
+
+            threading.Thread(target=pump_modal_stream, daemon=True).start()
+
+            started = time.perf_counter()
+            yield status_event(
+                "Starting Modal GPU container and loading filing index. First cold request can take 2-3 minutes."
+            )
+
+            while True:
+                try:
+                    chunk = chunks.get(timeout=10)
+                except queue.Empty:
+                    elapsed = int(time.perf_counter() - started)
+                    yield status_event(
+                        f"Still starting Modal GPU ({elapsed}s elapsed). This can take a few minutes after idle."
+                    )
+                    continue
+                if chunk is done:
+                    break
+                yield chunk
+
         return StreamingResponse(
-            server.query_stream.remote_gen(question, item.k, item.max_tokens, item.mode),
+            event_stream(),
             media_type="text/event-stream",
             headers={
                 "X-Accel-Buffering": "no",
@@ -428,7 +471,7 @@ def _make_streaming_app(model_name: str):
     image=image,
     volumes={VOLUME_PATH: volume},
     secrets=[modal.Secret.from_name("huggingface-secret")],
-    scaledown_window=300,
+    scaledown_window=600,
 )
 @modal.asgi_app(label="finsight-llama-stream")
 def llama_stream():
@@ -439,7 +482,7 @@ def llama_stream():
     image=image,
     volumes={VOLUME_PATH: volume},
     secrets=[modal.Secret.from_name("huggingface-secret")],
-    scaledown_window=300,
+    scaledown_window=600,
 )
 @modal.asgi_app(label="finsight-mistral-stream")
 def mistral_stream():
