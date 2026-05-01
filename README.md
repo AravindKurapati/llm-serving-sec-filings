@@ -98,16 +98,17 @@ modal run finsight.py
 
 ```bash
 modal deploy finsight.py
-# Prints your public URL:
-# https://your-workspace--finsight-api-query.modal.run
+# Prints your public streaming URLs:
+# https://your-workspace--finsight-llama-stream.modal.run
+# https://your-workspace--finsight-mistral-stream.modal.run
 ```
 
 ### Run the Frontend Locally
 
 ```bash
 # Add your deployed Modal URLs to frontend/.env:
-# VITE_MODAL_LLAMA_URL=https://your-workspace--finsight-llama-stream.modal.run
-# VITE_MODAL_MISTRAL_URL=https://your-workspace--finsight-mistral-stream.modal.run
+# VITE_LLAMA_URL=https://your-workspace--finsight-llama-stream.modal.run
+# VITE_MISTRAL_URL=https://your-workspace--finsight-mistral-stream.modal.run
 
 cd frontend
 npm install

@@ -8,11 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 app = FastAPI()
+EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+SYSTEM_MODES = ["concise", "detailed"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
@@ -23,6 +25,20 @@ FAKE_TOKENS = [
     " disruptions", " that", " could", " affect", " product", " availability",
     ".", " [", "1", "]",
 ]
+
+
+def status_payload() -> dict:
+    return {
+        "status": "ok",
+        "service": "finsight-mock-stream",
+        "model": "mock",
+        "model_id": "mock",
+        "embed_model": EMBED_MODEL,
+        "stream_path": "/v1/stream",
+        "modes": SYSTEM_MODES,
+        "index_present": True,
+        "metadata_present": True,
+    }
 
 
 async def _token_stream(question: str, k: int, max_tokens: int):
@@ -43,11 +59,28 @@ async def _token_stream(question: str, k: int, max_tokens: int):
         "input_tokens": 150,
         "throughput_tps": 28.6,
         "contexts": [
-            {"src": "AAPL_10K.txt", "text": "fake context chunk"}
+            {
+                "rank": 1,
+                "score": 0.8123,
+                "doc_id": "AAPL_mock-0",
+                "company": "AAPL",
+                "src": "AAPL_10K.txt",
+                "text": "fake context chunk",
+            }
         ],
     }
     yield f"data: {json.dumps(metrics)}\n\n"
     yield "data: [DONE]\n\n"
+
+
+@app.get("/health")
+async def health():
+    return status_payload()
+
+
+@app.get("/v1/status")
+async def status():
+    return status_payload()
 
 
 @app.post("/v1/stream")

@@ -12,8 +12,9 @@
 
 > The FinSight Modal deployment runs `meta-llama/Meta-Llama-3.1-8B-Instruct` and
 > `mistralai/Mistral-7B-Instruct-v0.3` via vLLM. This evaluation uses Groq API
-> proxies (both map to `llama-3.1-8b-instant` — mixtral decommissioned) to avoid
-> Modal GPU costs. Scores reflect model-family quality on this task.
+> proxies (both map to `llama-3.1-8b-instant` because Mixtral was decommissioned)
+> to avoid Modal GPU costs. These scores validate the RAGAS pipeline and shared
+> retrieval/judge setup; they should not be used as a LLaMA-vs-Mistral comparison.
 
 ---
 
