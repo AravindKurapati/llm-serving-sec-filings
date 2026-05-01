@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 Answer Quality Analysis for FinSight SEC Filing RAG
 ====================================================
 Reads results/benchmark_20260415_190523.json and computes per-answer metrics:
@@ -97,7 +97,7 @@ def main():
     header_mis    = f"{'Mistral':>{COL}}"
 
     print(f"\n{'='*80}")
-    print("Answer Quality  —  LLaMA 3.1 8B  vs  Mistral proxy")
+    print("Answer Quality  -  LLaMA 3.1 8B  vs  Mistral 7B")
     print(f"{'='*80}")
 
     for row in rows:

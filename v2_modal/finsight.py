@@ -31,6 +31,35 @@ MODELS = {
     "llama":   "meta-llama/Meta-Llama-3.1-8B-Instruct",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.3",
 }
+EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+
+
+def ranked_contexts(meta: list, ids, scores) -> list[dict]:
+    # FAISS receives one query vector at a time here, so the first row contains
+    # the ranked matches for that single question.
+    contexts = []
+    for rank, (idx, score) in enumerate(zip(ids[0], scores[0]), start=1):
+        if idx < 0:
+            continue
+        context = dict(meta[int(idx)])
+        context["rank"] = rank
+        context["score"] = float(score)
+        contexts.append(context)
+    return contexts
+
+
+def context_payload(context: dict, preview_chars: int = 200) -> dict:
+    score = context.get("score")
+    # Keep optional metadata keys stable in the API response. JSON null is easier
+    # for clients to handle than a shape that changes per chunk.
+    return {
+        "rank": context.get("rank"),
+        "score": round(float(score), 4) if score is not None else None,
+        "doc_id": context.get("doc_id"),
+        "company": context.get("company"),
+        "src": context.get("src", context.get("source", "unknown")),
+        "text": context.get("text", "")[:preview_chars],
+    }
 
 # ── STEP 1: Download + embed SEC filings (run once) ─────────
 @app.function(
@@ -97,7 +126,7 @@ def build_index():
 
     print(f"Total chunks: {len(corpus)}")
 
-    embedder = SentenceTransformer("BAAI/bge-small-en-v1.5")
+    embedder = SentenceTransformer(EMBED_MODEL)
     print("Embedding... (BGE-small, 384 dims)")
     X = embedder.encode(
         [r["text"] for r in corpus],
@@ -172,7 +201,7 @@ class VLLMServer:
         else:
             raise RuntimeError("vLLM server did not become healthy in time")
 
-        self.embedder = SentenceTransformer("BAAI/bge-small-en-v1.5")
+        self.embedder = SentenceTransformer(EMBED_MODEL)
         self.index    = faiss.read_index(str(INDEX_PATH))
         self.meta     = np.load(str(META_PATH), allow_pickle=True).tolist()
         self.model_id = model_id
@@ -196,8 +225,8 @@ class VLLMServer:
         vec = self.embedder.encode(
             [question], normalize_embeddings=True, convert_to_numpy=True
         ).astype("float32")
-        _, ids = self.index.search(vec, k)
-        return [self.meta[i] for i in ids[0] if i >= 0]
+        scores, ids = self.index.search(vec, k)
+        return ranked_contexts(self.meta, ids, scores)
 
     SYSTEM_PROMPTS = {
         "concise": (
@@ -214,7 +243,7 @@ class VLLMServer:
     def build_prompt(self, question: str, contexts: list, mode: str = "concise") -> str:
         system = self.SYSTEM_PROMPTS.get(mode, self.SYSTEM_PROMPTS["concise"])
         formatted = "\n\n".join(
-            f"[{i+1}] (from {c['src']}):\n{c['text'][:600]}"
+            f"[{i+1}] (from {c.get('src', c.get('source', 'unknown'))}):\n{c['text'][:600]}"
             for i, c in enumerate(contexts)
         )
         return (
@@ -315,7 +344,11 @@ class VLLMServer:
             "tokens":         n_tokens,
             "input_tokens":   input_tokens,
             "throughput_tps": throughput_tps,
-            "contexts":       [{"src": c["src"], "text": c["text"][:200]} for c in contexts],
+            "model":          self.model_name,
+            "model_id":       self.model_id,
+            "mode":           mode,
+            "retrieval_k":    len(contexts),
+            "contexts":       [context_payload(c) for c in contexts],
         }
         yield f"data: {json.dumps(metrics)}\n\n"
         yield "data: [DONE]\n\n"
@@ -329,37 +362,58 @@ def _make_streaming_app(model_name: str):
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import StreamingResponse
+    from pydantic import BaseModel, Field
+    from typing import Literal
+
+    class StreamRequest(BaseModel):
+        question: str = Field(..., min_length=1, max_length=2000)
+        k: int = Field(5, ge=1, le=10)
+        max_tokens: int = Field(400, ge=32, le=800)
+        mode: Literal["concise", "detailed"] = "concise"
 
     web_app = FastAPI()
     web_app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["POST", "OPTIONS"],
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://finsight-aru2.vercel.app",
+        ],
+        allow_origin_regex=r"https://finsight-aru2(-[a-z0-9]+)?\.vercel\.app",
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
 
-    def bounded_int(value, default: int, low: int, high: int) -> int:
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            parsed = default
-        return max(low, min(parsed, high))
+    def status_payload() -> dict:
+        return {
+            "status": "ok",
+            "service": "finsight-stream",
+            "model": model_name,
+            "model_id": MODELS[model_name],
+            "embed_model": EMBED_MODEL,
+            "stream_path": "/v1/stream",
+            "modes": list(VLLMServer.SYSTEM_PROMPTS),
+            "index_present": INDEX_PATH.exists(),
+            "metadata_present": META_PATH.exists(),
+        }
+
+    @web_app.get("/health")
+    async def health():
+        return status_payload()
+
+    @web_app.get("/v1/status")
+    async def status():
+        return status_payload()
 
     @web_app.post("/v1/stream")
-    async def stream_endpoint(item: dict):
-        question = str(item.get("question", "")).strip()
+    async def stream_endpoint(item: StreamRequest):
+        question = item.question.strip()
         if not question:
             raise HTTPException(status_code=400, detail="question is required")
 
-        k = bounded_int(item.get("k"), 5, 1, 10)
-        max_tokens = bounded_int(item.get("max_tokens"), 400, 32, 800)
-        mode = item.get("mode", "concise")
-        if mode not in VLLMServer.SYSTEM_PROMPTS:
-            mode = "concise"
-
         server = VLLMServer(model_name=model_name)
         return StreamingResponse(
-            server.query_stream.remote_gen(question, k, max_tokens, mode),
+            server.query_stream.remote_gen(question, item.k, item.max_tokens, item.mode),
             media_type="text/event-stream",
             headers={
                 "X-Accel-Buffering": "no",
@@ -443,7 +497,7 @@ class RAGEngine:
         else:
             raise RuntimeError("vLLM server did not become healthy in time")
 
-        self.embedder  = SentenceTransformer("BAAI/bge-small-en-v1.5")
+        self.embedder  = SentenceTransformer(EMBED_MODEL)
         self.index     = faiss.read_index(str(INDEX_PATH))
         self.meta      = np.load(str(META_PATH), allow_pickle=True).tolist()
         self.model_id  = model_id
@@ -468,12 +522,12 @@ class RAGEngine:
         vec = self.embedder.encode(
             [question], normalize_embeddings=True, convert_to_numpy=True
         ).astype("float32")
-        _, ids = self.index.search(vec, k)
-        return [self.meta[i] for i in ids[0] if i >= 0]
+        scores, ids = self.index.search(vec, k)
+        return ranked_contexts(self.meta, ids, scores)
 
     def build_prompt(self, question, contexts):
         formatted = "\n\n".join(
-            f"[{i+1}] (from {c['src']}):\n{c['text'][:600]}"
+            f"[{i+1}] (from {c.get('src', c.get('source', 'unknown'))}):\n{c['text'][:600]}"
             for i, c in enumerate(contexts)
         )
         return f"""You are a financial analyst. Answer using ONLY the context below.
@@ -563,7 +617,7 @@ Answer:"""
                 "input_tokens":   input_tokens,
                 "throughput_tps": throughput_tps,
             },
-            "contexts": [{"src": c["src"], "text": c["text"][:200]} for c in contexts],
+            "contexts": [context_payload(c) for c in contexts],
         }
 
     @modal.method()

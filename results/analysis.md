@@ -65,27 +65,28 @@ Mistral output: 217 tokens, 6 clean bullet points, stops naturally
 
 ## RAGAS Quality Evaluation
 
-> **Status**: Evaluation run pending — scores to be filled in after tonight's run (TPD resets midnight UTC).  
-> Full methodology: `scripts/ragas_eval.py` | Raw results: `results/ragas_eval_<timestamp>.json`
+> **Status**: Completed as a constrained methodology check.
+> Full methodology: `scripts/ragas_eval.py` | Summary report: `results/ragas_eval.md` | Raw runs: `results/ragas_eval_<timestamp>.json`
 
 **Setup**:
 - Metrics: faithfulness, answer_relevancy, context_precision
 - Judge LLM: Groq `llama-3.3-70b-versatile`
 - Testset: 10 hand-written Q+GT pairs (revenue, operating income, R&D spend, risk factors, segment performance across all 5 companies)
 - Retrieval: FAISS top-5 chunks, BGE-small-en-v1.5
+- Scored sample: 3 questions per model, limited by Groq free-tier daily tokens
 
-**Note on model proxies**: The Modal deployment runs `meta-llama/Meta-Llama-3.1-8B-Instruct` and `mistralai/Mistral-7B-Instruct-v0.3` via vLLM. RAGAS evaluation uses Groq API proxies to avoid Modal GPU costs — both currently map to `llama-3.1-8b-instant` (Mixtral was decommissioned on Groq). Scores reflect model-family quality, not bit-for-bit equivalence with the vLLM-served versions.
+**Proxy caveat**: The Modal deployment runs `meta-llama/Meta-Llama-3.1-8B-Instruct` and `mistralai/Mistral-7B-Instruct-v0.3` via vLLM. The RAGAS run used Groq API proxies to avoid Modal GPU cost, and both model lanes currently map to `llama-3.1-8b-instant` because Mixtral was decommissioned on Groq. These RAGAS numbers validate the eval pipeline and retrieval/judge setup; they should not be used as a LLaMA-vs-Mistral quality comparison.
 
-| Metric | LLaMA 3.1 8B | Mistral 7B |
-|--------|:------------:|:----------:|
-| Faithfulness | — | — |
-| Answer Relevancy | — | — |
-| Context Precision | — | — |
+| Metric | LLaMA 3.1 8B proxy | Mistral proxy |
+|--------|:------------------:|:-------------:|
+| Faithfulness | 0.4444 | 0.4444 |
+| Answer Relevancy | 0.5888 | 0.5836 |
+| Context Precision | 0.3333 | 0.3333 |
 
-**Anticipated findings**:
-- Faithfulness: given LLaMA's citation-repetition artifact, lower faithfulness is plausible — the model may be hallucinating in the repetition tail
-- Context Precision: retriever-dependent metric, so both models should score identically since they share the same FAISS index
-- Answer Relevancy: Mistral's concise outputs may score higher since they stay on-topic rather than padding to the token limit
+**Readout**:
+- The matching faithfulness and context_precision scores are expected because both lanes use the same answer proxy and the same FAISS retriever.
+- `answer_relevancy` differs only slightly, so the result should be treated as judge/run noise rather than a model signal.
+- For actual model comparison, prefer the real vLLM output metrics in `scripts/answer_quality.py`.
 
 ---
 
@@ -209,6 +210,7 @@ For latency-sensitive applications (real-time chat, streaming):
 ## Limitations
 
 - Only 5 questions — not statistically robust
-- RAGAS proxy models differ from vLLM-served models (see caveat above — Mistral proxy is a different model family)
-- Single-request benchmarking — concurrent request behavior not measured
+- RAGAS and LLM-judge proxy outputs are useful for methodology checks, not for comparing the deployed LLaMA and Mistral endpoints
+- The CLI benchmark path uses `RAGEngine.build_prompt()`, while the deployed streaming API uses `VLLMServer.build_prompt(mode=...)`; benchmark outputs are directionally useful but are not a byte-for-byte reproduction of the streaming prompt template
+- Concurrency was measured against one A10G-backed deployment; results may differ with horizontal Modal scaling
 - TTFT p95 is sensitive to KV cache warmup state: the first request after a cold start carries full prefill latency (800–1,200ms); subsequent requests with a warm prefix cache drop to ~200–240ms. p95 on a 5-question run captures the cold-start outlier, not steady-state latency.

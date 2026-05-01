@@ -1254,6 +1254,16 @@ button {
   white-space: nowrap;
 }
 
+.source-card__meta {
+  display: block;
+  margin-top: 3px;
+  color: rgba(247, 242, 233, 0.58);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .source-card__text {
   display: -webkit-box;
   margin: 5px 0 0;

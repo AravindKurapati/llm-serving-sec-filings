@@ -4,8 +4,8 @@ The working production version. Runs latest vLLM on Modal A10G GPUs with no depe
 
 ## Files
 
-- `finsight.py` — complete Modal backend (index building, RAG engine, FastAPI endpoint)
-- `app.py` — Streamlit frontend (runs locally, hits Modal endpoint)
+- `finsight.py` - complete Modal backend (index building, vLLM server mode, streaming FastAPI endpoints)
+- `app.py` - legacy Streamlit prototype kept for reference; the React app in `frontend/` is the maintained UI
 
 ## How to Run
 
@@ -48,46 +48,52 @@ The `build_index` call is commented out in `main()` — just runs the benchmarks
 modal run finsight.py
 ```
 
-### Deploy persistent API endpoint
+### Deploy persistent streaming API endpoints
 
 ```bash
 modal deploy finsight.py
 ```
 
-Prints a URL like:
+Deploys two model-specific SSE endpoints:
 ```
-https://your-workspace--finsight-api-query.modal.run
+https://your-workspace--finsight-llama-stream.modal.run
+https://your-workspace--finsight-mistral-stream.modal.run
 ```
 
-The endpoint stays live until you run `modal app stop finsight`. You only pay when requests come in (scales to zero when idle).
+Each endpoint exposes:
+- `POST /v1/stream` for browser-safe SSE streaming
+- `GET /health` and `GET /v1/status` for deployment checks
 
-### Run Streamlit frontend
+The endpoints stay live until you run `modal app stop finsight`. You only pay when requests come in (scales to zero when idle).
+
+### Smoke test an endpoint
 
 ```bash
-# 1. Paste your Modal URL into app.py:
-# MODAL_URL = "https://your-workspace--finsight-api-query.modal.run"
+curl https://your-workspace--finsight-llama-stream.modal.run/health
 
-# 2. Install and run
-pip install streamlit requests
-streamlit run app.py
+curl -N -X POST https://your-workspace--finsight-llama-stream.modal.run/v1/stream \
+  -H "Content-Type: application/json" \
+  -d "{\"question\":\"What are Apple's main supply chain risks?\",\"k\":3,\"max_tokens\":80}"
 ```
 
-Opens at http://localhost:8501. Select LLaMA or Mistral from the sidebar, ask questions about the SEC filings, and see TTFT/TPOT metrics under each answer.
+The final SSE metrics event includes latency, token counts, model metadata, and ranked source previews.
 
 ## Architecture
 
 ```
 User
- └─ Streamlit (localhost:8501)
-     └─ POST to Modal URL
-         └─ api_query function (Modal, A10G)
-             ├─ BGE-small embed query
-             ├─ FAISS search → top 5 chunks
-             └─ vLLM generate (LLaMA or Mistral)
-                 └─ Modal Volume
-                     ├─ chunks.faiss
-                     ├─ meta.npy
-                     └─ raw SEC filings
+  -> React frontend (Vite)
+  -> POST /v1/stream on one of two Modal endpoints
+  -> FastAPI streaming proxy (Modal CPU)
+  -> VLLMServer class (Modal A10G)
+  -> vLLM OpenAI-compatible server subprocess
+     -> BGE-small embed query
+     -> FAISS search top-k chunks
+     -> LLaMA 3.1 8B or Mistral 7B
+  -> Modal Volume
+     -> chunks.faiss
+     -> meta.npy
+     -> raw SEC filings
 ```
 
 ## Why Modal
@@ -114,8 +120,8 @@ The project includes a React frontend in the `frontend/` directory as an alterna
    
    Edit `.env.local` and fill in the two Modal endpoint URLs (obtained after running `modal deploy finsight.py`):
    ```
-   VITE_LLAMA_URL=https://your-workspace--finsight-api-query.modal.run
-   VITE_MISTRAL_URL=https://your-workspace--finsight-api-query.modal.run
+   VITE_LLAMA_URL=https://your-workspace--finsight-llama-stream.modal.run
+   VITE_MISTRAL_URL=https://your-workspace--finsight-mistral-stream.modal.run
    ```
 
 2. **Install dependencies:**
