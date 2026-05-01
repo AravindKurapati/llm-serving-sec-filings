@@ -1,3 +1,5 @@
+import os
+import re
 import modal
 import time
 from pathlib import Path
@@ -26,12 +28,133 @@ volume = modal.Volume.from_name("finsight-data", create_if_missing=True)
 VOLUME_PATH = Path("/data")
 INDEX_PATH  = VOLUME_PATH / "chunks.faiss"
 META_PATH   = VOLUME_PATH / "meta.npy"
+USAGE_PATH = VOLUME_PATH / "usage_limits.json"
+USAGE_LOCK_PATH = VOLUME_PATH / "usage_limits.lock"
 
 MODELS = {
     "llama":   "meta-llama/Meta-Llama-3.1-8B-Instruct",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.3",
 }
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+MAX_OUTPUT_TOKENS = int(os.getenv("FINSIGHT_MAX_OUTPUT_TOKENS", "300"))
+DAILY_STREAM_LIMIT = int(os.getenv("FINSIGHT_DAILY_STREAM_LIMIT", "12"))
+MONTHLY_STREAM_LIMIT = int(os.getenv("FINSIGHT_MONTHLY_STREAM_LIMIT", "100"))
+DEMO_OPEN_VALUES = {"1", "true", "yes", "on"}
+DEFAULT_DEMO_CLOSED_MESSAGE = (
+    "FinSight live model runs are paused to protect Modal credits. "
+    "Contact the project owner to enable a live demo session."
+)
+ALLOWED_QUESTION_HINT = (
+    "Ask about SEC 10-K filings for Apple/AAPL, Microsoft/MSFT, Alphabet/Google/GOOGL, "
+    "Amazon/AMZN, or Meta/META. Good topics include revenue, risk factors, cloud, "
+    "advertising, supply chain, cybersecurity, privacy, AI infrastructure, workforce, "
+    "capex, operating income, margins, and disclosed regulatory issues."
+)
+
+COMPANY_SCOPE_RE = re.compile(
+    r"\b(aapl|apple|msft|microsoft|googl|google|alphabet|amzn|amazon|meta|facebook)\b",
+    re.I,
+)
+FILING_SCOPE_RE = re.compile(
+    r"\b(sec|10-k|10k|annual reports?|filings?|risk factors?|md&a|these companies|"
+    r"all companies|indexed companies)\b",
+    re.I,
+)
+DISCLOSURE_TOPIC_RE = re.compile(
+    r"\b(revenue|sales|income|profit|margin|cash flow|capex|capital expenditures?|"
+    r"r&d|research and development|risk|risks|supply chain|cybersecurity|privacy|"
+    r"antitrust|regulatory|regulation|litigation|workforce|employees|cloud|aws|azure|"
+    r"advertising|ai|infrastructure|investment|segments?|services|costs?|competition|"
+    r"liquidity|debt|operating|financial|disclos(?:e|es|ed|ure|ures)|growth)\b",
+    re.I,
+)
+OFF_TOPIC_RE = re.compile(
+    r"\b(joke|poem|recipe|weather|sports?|movie|song|lyrics|capital of|homework|"
+    r"write code|generate code|jailbreak|ignore previous|system prompt)\b",
+    re.I,
+)
+
+
+def demo_is_open() -> bool:
+    return os.getenv("FINSIGHT_DEMO_OPEN", "0").strip().lower() in DEMO_OPEN_VALUES
+
+
+def demo_closed_message() -> str:
+    return os.getenv("FINSIGHT_DEMO_CLOSED_MESSAGE", DEFAULT_DEMO_CLOSED_MESSAGE)
+
+
+def validate_question_scope(question: str) -> tuple[bool, str]:
+    text = " ".join(question.strip().split())
+    if len(text) < 12 or len(text.split()) < 3:
+        return False, f"Question is too short. {ALLOWED_QUESTION_HINT}"
+    if OFF_TOPIC_RE.search(text):
+        return False, f"Off-topic request rejected. {ALLOWED_QUESTION_HINT}"
+
+    has_scope = bool(COMPANY_SCOPE_RE.search(text) or FILING_SCOPE_RE.search(text))
+    has_topic = bool(DISCLOSURE_TOPIC_RE.search(text))
+    if has_scope and has_topic:
+        return True, ""
+    return False, f"Question is outside the FinSight filing scope. {ALLOWED_QUESTION_HINT}"
+
+
+def reserve_usage_slot(model_name: str) -> tuple[bool, str, dict]:
+    import fcntl
+    import json
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    month_key = now.strftime("%Y-%m")
+    day_key = now.strftime("%Y-%m-%d")
+
+    VOLUME_PATH.mkdir(parents=True, exist_ok=True)
+    try:
+        volume.reload()
+    except Exception:
+        pass
+
+    with open(USAGE_LOCK_PATH, "a+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            if USAGE_PATH.exists():
+                usage = json.loads(USAGE_PATH.read_text(encoding="utf-8"))
+            else:
+                usage = {}
+
+            month_counts = usage.setdefault("months", {})
+            day_counts = usage.setdefault("days", {})
+            model_counts = usage.setdefault("models", {})
+            current_month = int(month_counts.get(month_key, 0))
+            current_day = int(day_counts.get(day_key, 0))
+
+            if current_month >= MONTHLY_STREAM_LIMIT:
+                return False, (
+                    f"Monthly FinSight demo limit reached ({MONTHLY_STREAM_LIMIT} stream requests). "
+                    "Try again next month or ask the owner to raise FINSIGHT_MONTHLY_STREAM_LIMIT."
+                ), usage
+            if current_day >= DAILY_STREAM_LIMIT:
+                return False, (
+                    f"Daily FinSight demo limit reached ({DAILY_STREAM_LIMIT} stream requests). "
+                    "Try again tomorrow or ask the owner to raise FINSIGHT_DAILY_STREAM_LIMIT."
+                ), usage
+
+            month_counts[month_key] = current_month + 1
+            day_counts[day_key] = current_day + 1
+            model_key = f"{month_key}:{model_name}"
+            model_counts[model_key] = int(model_counts.get(model_key, 0)) + 1
+            usage["updated_at"] = now.isoformat()
+            usage["limits"] = {
+                "daily_stream_limit": DAILY_STREAM_LIMIT,
+                "monthly_stream_limit": MONTHLY_STREAM_LIMIT,
+                "max_output_tokens": MAX_OUTPUT_TOKENS,
+            }
+            USAGE_PATH.write_text(json.dumps(usage, indent=2), encoding="utf-8")
+            try:
+                volume.commit()
+            except Exception:
+                pass
+            return True, "", usage
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def ranked_contexts(meta: list, ids, scores) -> list[dict]:
@@ -359,6 +482,9 @@ class VLLMServer:
 # Two lightweight CPU endpoints — each proxies SSE from VLLMServer.
 # CORS middleware is required for browser fetch() from the React dev server.
 def _make_streaming_app(model_name: str):
+    import json
+    import queue
+    import threading
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import StreamingResponse
@@ -368,7 +494,7 @@ def _make_streaming_app(model_name: str):
     class StreamRequest(BaseModel):
         question: str = Field(..., min_length=1, max_length=2000)
         k: int = Field(5, ge=1, le=10)
-        max_tokens: int = Field(400, ge=32, le=800)
+        max_tokens: int = Field(200, ge=32, le=800)
         mode: Literal["concise", "detailed"] = "concise"
 
     web_app = FastAPI()
@@ -393,6 +519,12 @@ def _make_streaming_app(model_name: str):
             "embed_model": EMBED_MODEL,
             "stream_path": "/v1/stream",
             "modes": list(VLLMServer.SYSTEM_PROMPTS),
+            "demo_open": demo_is_open(),
+            "demo_status": "open" if demo_is_open() else "paused",
+            "demo_closed_message": demo_closed_message(),
+            "daily_stream_limit": DAILY_STREAM_LIMIT,
+            "monthly_stream_limit": MONTHLY_STREAM_LIMIT,
+            "max_output_tokens": MAX_OUTPUT_TOKENS,
             "index_present": INDEX_PATH.exists(),
             "metadata_present": META_PATH.exists(),
         }
@@ -407,13 +539,63 @@ def _make_streaming_app(model_name: str):
 
     @web_app.post("/v1/stream")
     async def stream_endpoint(item: StreamRequest):
+        if not demo_is_open():
+            raise HTTPException(status_code=503, detail=demo_closed_message())
+
         question = item.question.strip()
         if not question:
             raise HTTPException(status_code=400, detail="question is required")
+        allowed, reason = validate_question_scope(question)
+        if not allowed:
+            raise HTTPException(status_code=400, detail=reason)
+        allowed, reason, _usage = reserve_usage_slot(model_name)
+        if not allowed:
+            raise HTTPException(status_code=429, detail=reason)
 
         server = VLLMServer(model_name=model_name)
+        max_tokens = min(item.max_tokens, MAX_OUTPUT_TOKENS)
+
+        def event_stream():
+            chunks = queue.Queue()
+            done = object()
+
+            def status_event(message: str):
+                status = {"type": "status", "stage": "modal_start", "message": message}
+                return f"data: {json.dumps(status)}\n\n"
+
+            def pump_modal_stream():
+                try:
+                    for chunk in server.query_stream.remote_gen(question, item.k, max_tokens, item.mode):
+                        chunks.put(chunk)
+                except Exception as exc:
+                    error = {"type": "error", "message": f"Modal streaming error: {exc}"}
+                    chunks.put(f"data: {json.dumps(error)}\n\n")
+                    chunks.put("data: [DONE]\n\n")
+                finally:
+                    chunks.put(done)
+
+            threading.Thread(target=pump_modal_stream, daemon=True).start()
+
+            started = time.perf_counter()
+            yield status_event(
+                "Starting Modal GPU container and loading filing index. First cold request can take 2-3 minutes."
+            )
+
+            while True:
+                try:
+                    chunk = chunks.get(timeout=10)
+                except queue.Empty:
+                    elapsed = int(time.perf_counter() - started)
+                    yield status_event(
+                        f"Still starting Modal GPU ({elapsed}s elapsed). This can take a few minutes after idle."
+                    )
+                    continue
+                if chunk is done:
+                    break
+                yield chunk
+
         return StreamingResponse(
-            server.query_stream.remote_gen(question, item.k, item.max_tokens, item.mode),
+            event_stream(),
             media_type="text/event-stream",
             headers={
                 "X-Accel-Buffering": "no",
@@ -428,7 +610,7 @@ def _make_streaming_app(model_name: str):
     image=image,
     volumes={VOLUME_PATH: volume},
     secrets=[modal.Secret.from_name("huggingface-secret")],
-    scaledown_window=300,
+    scaledown_window=600,
 )
 @modal.asgi_app(label="finsight-llama-stream")
 def llama_stream():
@@ -439,7 +621,7 @@ def llama_stream():
     image=image,
     volumes={VOLUME_PATH: volume},
     secrets=[modal.Secret.from_name("huggingface-secret")],
-    scaledown_window=300,
+    scaledown_window=600,
 )
 @modal.asgi_app(label="finsight-mistral-stream")
 def mistral_stream():

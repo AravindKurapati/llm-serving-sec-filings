@@ -19,7 +19,7 @@ export function ChatPanel({
   onMetrics,
   onAnswer,
 }) {
-  const { stream, isStreaming, answer, metrics, error, reset } = useRichStream(modalUrl)
+  const { stream, isStreaming, answer, metrics, error, statusMessage, reset } = useRichStream(modalUrl)
   const rafRef = useRef(null)
   const startRef = useRef(null)
   const firstTokenRef = useRef(false)
@@ -109,7 +109,7 @@ export function ChatPanel({
             {isStreaming && !answer && (
               <div className="panel__thinking">
                 <span />
-                Reading filings and preparing the first token
+                {statusMessage || 'Reading filings and preparing the first token'}
               </div>
             )}
             {error && (
