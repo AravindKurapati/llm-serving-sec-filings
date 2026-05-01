@@ -1,3 +1,4 @@
+import re
 import modal
 import time
 from pathlib import Path
@@ -32,6 +33,49 @@ MODELS = {
     "mistral": "mistralai/Mistral-7B-Instruct-v0.3",
 }
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+ALLOWED_QUESTION_HINT = (
+    "Ask about SEC 10-K filings for Apple/AAPL, Microsoft/MSFT, Alphabet/Google/GOOGL, "
+    "Amazon/AMZN, or Meta/META. Good topics include revenue, risk factors, cloud, "
+    "advertising, supply chain, cybersecurity, privacy, AI infrastructure, workforce, "
+    "capex, operating income, margins, and disclosed regulatory issues."
+)
+
+COMPANY_SCOPE_RE = re.compile(
+    r"\b(aapl|apple|msft|microsoft|googl|google|alphabet|amzn|amazon|meta|facebook)\b",
+    re.I,
+)
+FILING_SCOPE_RE = re.compile(
+    r"\b(sec|10-k|10k|annual reports?|filings?|risk factors?|md&a|these companies|"
+    r"all companies|indexed companies)\b",
+    re.I,
+)
+DISCLOSURE_TOPIC_RE = re.compile(
+    r"\b(revenue|sales|income|profit|margin|cash flow|capex|capital expenditures?|"
+    r"r&d|research and development|risk|risks|supply chain|cybersecurity|privacy|"
+    r"antitrust|regulatory|regulation|litigation|workforce|employees|cloud|aws|azure|"
+    r"advertising|ai|infrastructure|investment|segments?|services|costs?|competition|"
+    r"liquidity|debt|operating|financial|disclos(?:e|es|ed|ure|ures)|growth)\b",
+    re.I,
+)
+OFF_TOPIC_RE = re.compile(
+    r"\b(joke|poem|recipe|weather|sports?|movie|song|lyrics|capital of|homework|"
+    r"write code|generate code|jailbreak|ignore previous|system prompt)\b",
+    re.I,
+)
+
+
+def validate_question_scope(question: str) -> tuple[bool, str]:
+    text = " ".join(question.strip().split())
+    if len(text) < 12 or len(text.split()) < 3:
+        return False, f"Question is too short. {ALLOWED_QUESTION_HINT}"
+    if OFF_TOPIC_RE.search(text):
+        return False, f"Off-topic request rejected. {ALLOWED_QUESTION_HINT}"
+
+    has_scope = bool(COMPANY_SCOPE_RE.search(text) or FILING_SCOPE_RE.search(text))
+    has_topic = bool(DISCLOSURE_TOPIC_RE.search(text))
+    if has_scope and has_topic:
+        return True, ""
+    return False, f"Question is outside the FinSight filing scope. {ALLOWED_QUESTION_HINT}"
 
 
 def ranked_contexts(meta: list, ids, scores) -> list[dict]:
@@ -413,6 +457,9 @@ def _make_streaming_app(model_name: str):
         question = item.question.strip()
         if not question:
             raise HTTPException(status_code=400, detail="question is required")
+        allowed, reason = validate_question_scope(question)
+        if not allowed:
+            raise HTTPException(status_code=400, detail=reason)
 
         server = VLLMServer(model_name=model_name)
 

@@ -94,7 +94,14 @@ export function useRichStream(modalUrl) {
 
       if (!res.ok) {
         const details = await res.text().catch(() => '')
-        throw new Error(details || `HTTP ${res.status}`)
+        let message = details || `HTTP ${res.status}`
+        try {
+          const parsed = JSON.parse(details)
+          message = parsed.detail || message
+        } catch {
+          // Keep the raw response body when it is not JSON.
+        }
+        throw new Error(message)
       }
       if (!res.body) throw new Error('Streaming response body is unavailable')
 
