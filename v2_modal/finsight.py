@@ -1,3 +1,4 @@
+import os
 import re
 import modal
 import time
@@ -27,12 +28,17 @@ volume = modal.Volume.from_name("finsight-data", create_if_missing=True)
 VOLUME_PATH = Path("/data")
 INDEX_PATH  = VOLUME_PATH / "chunks.faiss"
 META_PATH   = VOLUME_PATH / "meta.npy"
+USAGE_PATH = VOLUME_PATH / "usage_limits.json"
+USAGE_LOCK_PATH = VOLUME_PATH / "usage_limits.lock"
 
 MODELS = {
     "llama":   "meta-llama/Meta-Llama-3.1-8B-Instruct",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.3",
 }
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+MAX_OUTPUT_TOKENS = int(os.getenv("FINSIGHT_MAX_OUTPUT_TOKENS", "300"))
+DAILY_STREAM_LIMIT = int(os.getenv("FINSIGHT_DAILY_STREAM_LIMIT", "12"))
+MONTHLY_STREAM_LIMIT = int(os.getenv("FINSIGHT_MONTHLY_STREAM_LIMIT", "100"))
 ALLOWED_QUESTION_HINT = (
     "Ask about SEC 10-K filings for Apple/AAPL, Microsoft/MSFT, Alphabet/Google/GOOGL, "
     "Amazon/AMZN, or Meta/META. Good topics include revenue, risk factors, cloud, "
@@ -76,6 +82,66 @@ def validate_question_scope(question: str) -> tuple[bool, str]:
     if has_scope and has_topic:
         return True, ""
     return False, f"Question is outside the FinSight filing scope. {ALLOWED_QUESTION_HINT}"
+
+
+def reserve_usage_slot(model_name: str) -> tuple[bool, str, dict]:
+    import fcntl
+    import json
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    month_key = now.strftime("%Y-%m")
+    day_key = now.strftime("%Y-%m-%d")
+
+    VOLUME_PATH.mkdir(parents=True, exist_ok=True)
+    try:
+        volume.reload()
+    except Exception:
+        pass
+
+    with open(USAGE_LOCK_PATH, "a+", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            if USAGE_PATH.exists():
+                usage = json.loads(USAGE_PATH.read_text(encoding="utf-8"))
+            else:
+                usage = {}
+
+            month_counts = usage.setdefault("months", {})
+            day_counts = usage.setdefault("days", {})
+            model_counts = usage.setdefault("models", {})
+            current_month = int(month_counts.get(month_key, 0))
+            current_day = int(day_counts.get(day_key, 0))
+
+            if current_month >= MONTHLY_STREAM_LIMIT:
+                return False, (
+                    f"Monthly FinSight demo limit reached ({MONTHLY_STREAM_LIMIT} stream requests). "
+                    "Try again next month or ask the owner to raise FINSIGHT_MONTHLY_STREAM_LIMIT."
+                ), usage
+            if current_day >= DAILY_STREAM_LIMIT:
+                return False, (
+                    f"Daily FinSight demo limit reached ({DAILY_STREAM_LIMIT} stream requests). "
+                    "Try again tomorrow or ask the owner to raise FINSIGHT_DAILY_STREAM_LIMIT."
+                ), usage
+
+            month_counts[month_key] = current_month + 1
+            day_counts[day_key] = current_day + 1
+            model_key = f"{month_key}:{model_name}"
+            model_counts[model_key] = int(model_counts.get(model_key, 0)) + 1
+            usage["updated_at"] = now.isoformat()
+            usage["limits"] = {
+                "daily_stream_limit": DAILY_STREAM_LIMIT,
+                "monthly_stream_limit": MONTHLY_STREAM_LIMIT,
+                "max_output_tokens": MAX_OUTPUT_TOKENS,
+            }
+            USAGE_PATH.write_text(json.dumps(usage, indent=2), encoding="utf-8")
+            try:
+                volume.commit()
+            except Exception:
+                pass
+            return True, "", usage
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def ranked_contexts(meta: list, ids, scores) -> list[dict]:
@@ -204,7 +270,7 @@ def build_index():
     volumes={VOLUME_PATH: volume},
     timeout=600,
     secrets=[modal.Secret.from_name("huggingface-secret")],
-    scaledown_window=600,
+    scaledown_window=120,
 )
 class VLLMServer:
     model_name: str = modal.parameter(default="llama")
@@ -415,7 +481,7 @@ def _make_streaming_app(model_name: str):
     class StreamRequest(BaseModel):
         question: str = Field(..., min_length=1, max_length=2000)
         k: int = Field(5, ge=1, le=10)
-        max_tokens: int = Field(400, ge=32, le=800)
+        max_tokens: int = Field(200, ge=32, le=800)
         mode: Literal["concise", "detailed"] = "concise"
 
     web_app = FastAPI()
@@ -440,6 +506,9 @@ def _make_streaming_app(model_name: str):
             "embed_model": EMBED_MODEL,
             "stream_path": "/v1/stream",
             "modes": list(VLLMServer.SYSTEM_PROMPTS),
+            "daily_stream_limit": DAILY_STREAM_LIMIT,
+            "monthly_stream_limit": MONTHLY_STREAM_LIMIT,
+            "max_output_tokens": MAX_OUTPUT_TOKENS,
             "index_present": INDEX_PATH.exists(),
             "metadata_present": META_PATH.exists(),
         }
@@ -460,8 +529,12 @@ def _make_streaming_app(model_name: str):
         allowed, reason = validate_question_scope(question)
         if not allowed:
             raise HTTPException(status_code=400, detail=reason)
+        allowed, reason, _usage = reserve_usage_slot(model_name)
+        if not allowed:
+            raise HTTPException(status_code=429, detail=reason)
 
         server = VLLMServer(model_name=model_name)
+        max_tokens = min(item.max_tokens, MAX_OUTPUT_TOKENS)
 
         def event_stream():
             chunks = queue.Queue()
@@ -473,7 +546,7 @@ def _make_streaming_app(model_name: str):
 
             def pump_modal_stream():
                 try:
-                    for chunk in server.query_stream.remote_gen(question, item.k, item.max_tokens, item.mode):
+                    for chunk in server.query_stream.remote_gen(question, item.k, max_tokens, item.mode):
                         chunks.put(chunk)
                 except Exception as exc:
                     error = {"type": "error", "message": f"Modal streaming error: {exc}"}

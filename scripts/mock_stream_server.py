@@ -12,6 +12,10 @@ from fastapi.responses import StreamingResponse
 app = FastAPI()
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 SYSTEM_MODES = ["concise", "detailed"]
+MAX_OUTPUT_TOKENS = 300
+DAILY_STREAM_LIMIT = 12
+MONTHLY_STREAM_LIMIT = 100
+usage_counts = {"day": 0, "month": 0}
 ALLOWED_QUESTION_HINT = (
     "Ask about SEC 10-K filings for Apple/AAPL, Microsoft/MSFT, Alphabet/Google/GOOGL, "
     "Amazon/AMZN, or Meta/META and filing topics such as revenue, risks, cloud, "
@@ -76,6 +80,9 @@ def status_payload() -> dict:
         "embed_model": EMBED_MODEL,
         "stream_path": "/v1/stream",
         "modes": SYSTEM_MODES,
+        "daily_stream_limit": DAILY_STREAM_LIMIT,
+        "monthly_stream_limit": MONTHLY_STREAM_LIMIT,
+        "max_output_tokens": MAX_OUTPUT_TOKENS,
         "index_present": True,
         "metadata_present": True,
     }
@@ -135,8 +142,14 @@ async def stream_endpoint(item: dict):
     allowed, reason = validate_question_scope(question)
     if not allowed:
         raise HTTPException(status_code=400, detail=reason)
+    if usage_counts["month"] >= MONTHLY_STREAM_LIMIT:
+        raise HTTPException(status_code=429, detail="Monthly FinSight demo limit reached.")
+    if usage_counts["day"] >= DAILY_STREAM_LIMIT:
+        raise HTTPException(status_code=429, detail="Daily FinSight demo limit reached.")
+    usage_counts["month"] += 1
+    usage_counts["day"] += 1
     k          = int(item.get("k", 5))
-    max_tokens = int(item.get("max_tokens", 20))
+    max_tokens = min(int(item.get("max_tokens", 20)), MAX_OUTPUT_TOKENS)
     _mode      = item.get("mode", "concise")  # accepted, not used in mock
 
     return StreamingResponse(

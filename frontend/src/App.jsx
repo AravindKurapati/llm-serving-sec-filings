@@ -109,7 +109,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('chat')
   const [question, setQuestion] = useState('')
   const [k, setK] = useState(5)
-  const [maxTokens, setMaxTokens] = useState(400)
+  const [maxTokens, setMaxTokens] = useState(200)
   const [mode, setMode] = useState('concise')
   const [triggerCount, setTriggerCount] = useState(0)
   const [input, setInput] = useState('')
@@ -342,10 +342,10 @@ export default function App() {
                     <input
                       type="number"
                       min={80}
-                      max={800}
+                      max={300}
                       step={20}
                       value={maxTokens}
-                      onChange={e => setMaxTokens(Math.min(800, Math.max(80, Number(e.target.value) || 80)))}
+                      onChange={e => setMaxTokens(Math.min(300, Math.max(80, Number(e.target.value) || 80)))}
                     />
                   </label>
 
