@@ -144,12 +144,6 @@ Modal Volumes cache model weights after the first download. Subsequent cold star
 
 ---
 
-## Status
-
-- Infrastructure benchmarking: complete (real TTFT via SSE streaming)
-- Output quality: complete (answer quality analysis + LLM-as-judge eval)
-- Concurrency: complete (stress tested up to 8 concurrent requests)
-- Frontend: complete — Command Center UI deployed to Vercel
 
 ## Requirements
 
