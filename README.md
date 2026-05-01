@@ -2,7 +2,7 @@
 
 > RAG over real 10-K filings: LLaMA 3.1 8B vs Mistral 7B, benchmarked on A10G via Modal
 
-**[Live Demo →](https://finsight-aru2.vercel.app)**
+**[Live Demo →](https://finsight-aru2.vercel.app)** *(demo gated — contact owner to activate a live session)*
 
 This project started as a Kaggle notebook and evolved into a production Modal deployment with a deployed React frontend. The repo preserves both the original attempt and the working solution.
 
@@ -21,7 +21,7 @@ This project started as a Kaggle notebook and evolved into a production Modal de
 
 ## Results
 
-Benchmarked on Modal A10G (sm_86), 5 questions, 400 max tokens. TTFT measured as real wall-clock time to first SSE token via vLLM server mode (not estimated).
+Benchmarked on Modal A10G (sm_86), 5 questions, 300 max tokens. TTFT measured as real wall-clock time to first SSE token via vLLM server mode (not estimated).
 
 | Metric | LLaMA 3.1 8B | Mistral 7B |
 |--------|-------------|------------|
@@ -145,6 +145,17 @@ Modal Volumes cache model weights after the first download. Subsequent cold star
 
 ---
 
+
+## Demo Safeguards
+
+Live inference costs real Modal credits, so four guards protect the deployment:
+
+- **Demo gate** — controlled by `FINSIGHT_DEMO_OPEN` env var (set to `1` to open); returns HTTP 503 with a human-readable message when closed
+- **Usage quota** — daily (12) and monthly (100) stream request limits tracked in a JSON file on the Modal Volume; per-model counts recorded for analysis
+- **Scope filter** — questions must reference one of the 5 indexed companies (AAPL, MSFT, GOOGL, AMZN, META) and a disclosure topic (revenue, risk factors, cloud, etc.); off-topic or too-short prompts are rejected before any GPU time is spent
+- **Cold-start UX** — frontend shows a live status message ("Connecting to Modal stream…") and escalates to "Cold starting Modal GPU, 2-3 min" after 15 s; hard abort timeout at 4 minutes
+
+---
 
 ## Requirements
 
