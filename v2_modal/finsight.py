@@ -39,6 +39,11 @@ EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 MAX_OUTPUT_TOKENS = int(os.getenv("FINSIGHT_MAX_OUTPUT_TOKENS", "300"))
 DAILY_STREAM_LIMIT = int(os.getenv("FINSIGHT_DAILY_STREAM_LIMIT", "12"))
 MONTHLY_STREAM_LIMIT = int(os.getenv("FINSIGHT_MONTHLY_STREAM_LIMIT", "100"))
+DEMO_OPEN_VALUES = {"1", "true", "yes", "on"}
+DEFAULT_DEMO_CLOSED_MESSAGE = (
+    "FinSight live model runs are paused to protect Modal credits. "
+    "Contact the project owner to enable a live demo session."
+)
 ALLOWED_QUESTION_HINT = (
     "Ask about SEC 10-K filings for Apple/AAPL, Microsoft/MSFT, Alphabet/Google/GOOGL, "
     "Amazon/AMZN, or Meta/META. Good topics include revenue, risk factors, cloud, "
@@ -68,6 +73,14 @@ OFF_TOPIC_RE = re.compile(
     r"write code|generate code|jailbreak|ignore previous|system prompt)\b",
     re.I,
 )
+
+
+def demo_is_open() -> bool:
+    return os.getenv("FINSIGHT_DEMO_OPEN", "0").strip().lower() in DEMO_OPEN_VALUES
+
+
+def demo_closed_message() -> str:
+    return os.getenv("FINSIGHT_DEMO_CLOSED_MESSAGE", DEFAULT_DEMO_CLOSED_MESSAGE)
 
 
 def validate_question_scope(question: str) -> tuple[bool, str]:
@@ -506,6 +519,9 @@ def _make_streaming_app(model_name: str):
             "embed_model": EMBED_MODEL,
             "stream_path": "/v1/stream",
             "modes": list(VLLMServer.SYSTEM_PROMPTS),
+            "demo_open": demo_is_open(),
+            "demo_status": "open" if demo_is_open() else "paused",
+            "demo_closed_message": demo_closed_message(),
             "daily_stream_limit": DAILY_STREAM_LIMIT,
             "monthly_stream_limit": MONTHLY_STREAM_LIMIT,
             "max_output_tokens": MAX_OUTPUT_TOKENS,
@@ -523,6 +539,9 @@ def _make_streaming_app(model_name: str):
 
     @web_app.post("/v1/stream")
     async def stream_endpoint(item: StreamRequest):
+        if not demo_is_open():
+            raise HTTPException(status_code=503, detail=demo_closed_message())
+
         question = item.question.strip()
         if not question:
             raise HTTPException(status_code=400, detail="question is required")

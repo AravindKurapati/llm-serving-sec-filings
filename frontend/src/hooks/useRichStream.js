@@ -101,6 +101,9 @@ export function useRichStream(modalUrl) {
         } catch {
           // Keep the raw response body when it is not JSON.
         }
+        if (res.status === 503) {
+          message = `Demo paused: ${message}`
+        }
         throw new Error(message)
       }
       if (!res.body) throw new Error('Streaming response body is unavailable')

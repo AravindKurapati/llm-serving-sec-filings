@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import re
 
 from fastapi import FastAPI
@@ -16,6 +17,11 @@ MAX_OUTPUT_TOKENS = 300
 DAILY_STREAM_LIMIT = 12
 MONTHLY_STREAM_LIMIT = 100
 usage_counts = {"day": 0, "month": 0}
+DEMO_OPEN_VALUES = {"1", "true", "yes", "on"}
+DEFAULT_DEMO_CLOSED_MESSAGE = (
+    "FinSight live model runs are paused to protect Modal credits. "
+    "Contact the project owner to enable a live demo session."
+)
 ALLOWED_QUESTION_HINT = (
     "Ask about SEC 10-K filings for Apple/AAPL, Microsoft/MSFT, Alphabet/Google/GOOGL, "
     "Amazon/AMZN, or Meta/META and filing topics such as revenue, risks, cloud, "
@@ -43,6 +49,14 @@ OFF_TOPIC_RE = re.compile(
     r"generate code|jailbreak|ignore previous|system prompt)\b",
     re.I,
 )
+
+
+def demo_is_open() -> bool:
+    return os.getenv("FINSIGHT_DEMO_OPEN", "1").strip().lower() in DEMO_OPEN_VALUES
+
+
+def demo_closed_message() -> str:
+    return os.getenv("FINSIGHT_DEMO_CLOSED_MESSAGE", DEFAULT_DEMO_CLOSED_MESSAGE)
 
 
 def validate_question_scope(question: str) -> tuple[bool, str]:
@@ -80,6 +94,9 @@ def status_payload() -> dict:
         "embed_model": EMBED_MODEL,
         "stream_path": "/v1/stream",
         "modes": SYSTEM_MODES,
+        "demo_open": demo_is_open(),
+        "demo_status": "open" if demo_is_open() else "paused",
+        "demo_closed_message": demo_closed_message(),
         "daily_stream_limit": DAILY_STREAM_LIMIT,
         "monthly_stream_limit": MONTHLY_STREAM_LIMIT,
         "max_output_tokens": MAX_OUTPUT_TOKENS,
@@ -138,6 +155,9 @@ async def status():
 
 @app.post("/v1/stream")
 async def stream_endpoint(item: dict):
+    if not demo_is_open():
+        raise HTTPException(status_code=503, detail=demo_closed_message())
+
     question   = item.get("question", "")
     allowed, reason = validate_question_scope(question)
     if not allowed:

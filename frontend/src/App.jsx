@@ -280,7 +280,7 @@ export default function App() {
                 </div>
                 <span className="console-live">
                   <Activity size={14} aria-hidden="true" />
-                  Modal endpoints armed
+                  Modal runs gated
                 </span>
               </div>
 
