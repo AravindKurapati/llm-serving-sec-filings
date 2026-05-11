@@ -5,6 +5,9 @@ import { MessageBubble } from './MessageBubble'
 import { MetricsBar } from './MetricsBar'
 import { SourceDrawer } from './SourceDrawer'
 
+const COLD_START_WARNING_MS = 15_000
+const HARD_ABORT_MS = 240_000
+
 export function ChatPanel({
   modelKey,
   modelLabel,
@@ -23,14 +26,29 @@ export function ChatPanel({
   const rafRef = useRef(null)
   const startRef = useRef(null)
   const firstTokenRef = useRef(false)
+  const coldTimerRef = useRef(null)
+  const abortTimerRef = useRef(null)
   const [ttftLive, setTtftLive] = useState(null)
+  const [coldStartMsg, setColdStartMsg] = useState(null)
 
   useEffect(() => {
     if (triggerCount > 0 && question) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      clearTimeout(coldTimerRef.current)
+      clearTimeout(abortTimerRef.current)
       firstTokenRef.current = false
       startRef.current = performance.now()
       setTtftLive(0)
+      setColdStartMsg('Connecting to Modal stream…')
+
+      coldTimerRef.current = setTimeout(() => {
+        setColdStartMsg('Cold starting Modal GPU — this may take 2–3 min…')
+      }, COLD_START_WARNING_MS)
+
+      abortTimerRef.current = setTimeout(() => {
+        reset()
+        setColdStartMsg(null)
+      }, HARD_ABORT_MS)
 
       function tick() {
         setTtftLive(Math.round(performance.now() - startRef.current))
@@ -52,6 +70,9 @@ export function ChatPanel({
       rafRef.current = null
       firstTokenRef.current = true
       setTtftLive(Math.round(performance.now() - startRef.current))
+      clearTimeout(coldTimerRef.current)
+      clearTimeout(abortTimerRef.current)
+      setColdStartMsg(null)
     }
   }, [answer])
 
@@ -66,10 +87,13 @@ export function ChatPanel({
   function handleReset() {
     reset()
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    clearTimeout(coldTimerRef.current)
+    clearTimeout(abortTimerRef.current)
     rafRef.current = null
     startRef.current = null
     firstTokenRef.current = false
     setTtftLive(null)
+    setColdStartMsg(null)
   }
 
   const status = error ? 'Issue' : isStreaming ? 'Streaming' : answer ? 'Complete' : 'Ready'
@@ -109,7 +133,7 @@ export function ChatPanel({
             {isStreaming && !answer && (
               <div className="panel__thinking">
                 <span />
-                Reading filings and preparing the first token
+                {coldStartMsg ?? 'Reading filings and preparing the first token'}
               </div>
             )}
             {error && (
