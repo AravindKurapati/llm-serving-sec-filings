@@ -1,0 +1,305 @@
+{
+  "timestamp": "20260511_152934",
+  "k_values": [
+    2,
+    3,
+    5,
+    8,
+    10
+  ],
+  "n_questions": 5,
+  "results": {
+    "llama": {
+      "groq_model": "llama-3.1-8b-instant",
+      "summary": {
+        "2": {
+          "avg_prompt_tokens": 448.6,
+          "avg_completion_tokens": 152.6,
+          "avg_latency_ms": 788.8,
+          "avg_answer_words": 116.4,
+          "n": 5
+        },
+        "3": {
+          "avg_prompt_tokens": 601.8,
+          "avg_completion_tokens": 169.6,
+          "avg_latency_ms": 1015.8,
+          "avg_answer_words": 127.6,
+          "n": 5
+        },
+        "5": {
+          "avg_prompt_tokens": 902.0,
+          "avg_completion_tokens": 177.2,
+          "avg_latency_ms": 3128.1,
+          "avg_answer_words": 129.8,
+          "n": 5
+        },
+        "8": {
+          "avg_prompt_tokens": 1390.8,
+          "avg_completion_tokens": 144.6,
+          "avg_latency_ms": 4986.5,
+          "avg_answer_words": 108.0,
+          "n": 5
+        },
+        "10": {
+          "avg_prompt_tokens": 1749.0,
+          "avg_completion_tokens": 234.6,
+          "avg_latency_ms": 8485.2,
+          "avg_answer_words": 170.2,
+          "n": 5
+        }
+      },
+      "raw": [
+        {
+          "question_idx": 1,
+          "question": "What was Apple's total net revenue in its most recent fiscal year, and which product category was the largest contributor?",
+          "k": 2,
+          "prompt_tokens": 531,
+          "completion_tokens": 61,
+          "latency_ms": 1258.5,
+          "answer_words": 40,
+          "answer": "Based on the provided context, Apple's total net revenue for its most recent fiscal year (2025) was $82.0 billion [1]. \n\nThe largest contributor to Apple's revenue in 2025 was the Foreign segment, which accounted for $25,830 million in revenue [1]."
+        },
+        {
+          "question_idx": 1,
+          "question": "What was Apple's total net revenue in its most recent fiscal year, and which product category was the largest contributor?",
+          "k": 3,
+          "prompt_tokens": 750,
+          "completion_tokens": 99,
+          "latency_ms": 497.6,
+          "answer_words": 62,
+          "answer": "Based on the provided context, Apple's total net revenue for its most recent fiscal year (2025) was $209,586 million for iPhone, $33,708 million for Mac, $28,023 million for iPad, $35,686 million for Wearables, Home and Accessories, and $109,158 million for Services.\n\nThe largest contributor to Apple's total net revenue in 2025 was the iPhone product category, with $209,586 million in revenue [3]."
+        },
+        {
+          "question_idx": 1,
+          "question": "What was Apple's total net revenue in its most recent fiscal year, and which product category was the largest contributor?",
+          "k": 5,
+          "prompt_tokens": 1108,
+          "completion_tokens": 101,
+          "latency_ms": 785.8,
+          "answer_words": 63,
+          "answer": "Based on the provided context, Apple's total net revenue for its most recent fiscal year (2025) was $209,586 million for iPhone, $33,708 million for Mac, $28,023 million for iPad, $35,686 million for Wearables, Home and Accessories, and $109,158 million for Services [3].\n\nThe largest contributor to Apple's total net revenue in 2025 was the iPhone product category, with revenue of $209,586 million [3]."
+        },
+        {
+          "question_idx": 1,
+          "question": "What was Apple's total net revenue in its most recent fiscal year, and which product category was the largest contributor?",
+          "k": 8,
+          "prompt_tokens": 1724,
+          "completion_tokens": 68,
+          "latency_ms": 388.4,
+          "answer_words": 42,
+          "answer": "According to Apple's 2025 Form 10-K, the total net revenue for the fiscal year ended September 27, 2025, was $416,161 million [8].\n\nThe largest contributor to Apple's net revenue in 2025 was the iPhone product category, with $209,586 million in revenue [3]."
+        },
+        {
+          "question_idx": 1,
+          "question": "What was Apple's total net revenue in its most recent fiscal year, and which product category was the largest contributor?",
+          "k": 10,
+          "prompt_tokens": 2114,
+          "completion_tokens": 61,
+          "latency_ms": 430.0,
+          "answer_words": 40,
+          "answer": "Based on the provided context, Apple's total net revenue for its most recent fiscal year (2025) was $416,161 million [8]. \n\nThe largest contributor to Apple's net revenue in 2025 was the iPhone product category, with $209,586 million in revenue [3]."
+        },
+        {
+          "question_idx": 2,
+          "question": "How did Microsoft's operating income change year-over-year, and which business segment contributed most to that growth?",
+          "k": 2,
+          "prompt_tokens": 504,
+          "completion_tokens": 44,
+          "latency_ms": 341.8,
+          "answer_words": 25,
+          "answer": "Microsoft's operating income increased by 17% year-over-year, from $109,433 to $128,528 [1]. \n\nThe Intelligent Cloud segment contributed significantly to this growth, driven by Azure [2]."
+        },
+        {
+          "question_idx": 2,
+          "question": "How did Microsoft's operating income change year-over-year, and which business segment contributed most to that growth?",
+          "k": 3,
+          "prompt_tokens": 627,
+          "completion_tokens": 49,
+          "latency_ms": 294.5,
+          "answer_words": 30,
+          "answer": "Based on the provided context, Microsoft's operating income increased by 17% year-over-year from $109,433 to $128,528 [1]. \n\nThe Intelligent Cloud segment contributed significantly to this growth, driven by Azure [2]."
+        },
+        {
+          "question_idx": 2,
+          "question": "How did Microsoft's operating income change year-over-year, and which business segment contributed most to that growth?",
+          "k": 5,
+          "prompt_tokens": 862,
+          "completion_tokens": 61,
+          "latency_ms": 299.5,
+          "answer_words": 39,
+          "answer": "Based on the provided context, Microsoft's operating income increased by 17% year-over-year from $109,433 to $128,528 in Fiscal Year 2025 compared to Fiscal Year 2024 [1].\n\nThe Intelligent Cloud segment contributed significantly to this growth, driven by Azure [2]."
+        },
+        {
+          "question_idx": 2,
+          "question": "How did Microsoft's operating income change year-over-year, and which business segment contributed most to that growth?",
+          "k": 8,
+          "prompt_tokens": 1321,
+          "completion_tokens": 51,
+          "latency_ms": 379.4,
+          "answer_words": 30,
+          "answer": "Microsoft's operating income increased by 17% year-over-year, from $109,433 to $128,528 [1]. \n\nThe Productivity and Business Processes segment contributed most to the growth, driven by Microsoft 365 Commercial cloud [2]."
+        },
+        {
+          "question_idx": 2,
+          "question": "How did Microsoft's operating income change year-over-year, and which business segment contributed most to that growth?",
+          "k": 10,
+          "prompt_tokens": 1697,
+          "completion_tokens": 316,
+          "latency_ms": 6816.4,
+          "answer_words": 214,
+          "answer": "Microsoft's operating income increased by 17% year-over-year, from $109,433 million in fiscal year 2024 to $128,528 million in fiscal year 2025 [1].\n\nThe Productivity and Business Processes segment contributed most to the growth in operating income, driven by Microsoft 365 Commercial cloud [2].\n\nThe segment's revenue increased by 15% year-over-year, with growth across each of the segments, including Productivity and Business Processes, Intelligent Cloud, and More Personal Computing [2].\n\nThe Intelligent Cloud segment also saw significant growth, driven by Azure, and the More Personal Computing segment saw growth driven by Gaming and Search and news advertising [2].\n\nThe Productivity and Business Processes segment primarily comprises Microsoft 365 Commercial products and cloud services, including Microsoft 365 Commercial cloud, comprising Microsoft 365 Commercial, Enterprise Mobility + Security, the cloud portion of Windows Commercial, and Office [6].\n\nThe segment's income from operations was $64,111 million in fiscal year 2025, compared to $53,419 million in fiscal year 2024, an increase of 20% [10].\n\nThe Intelligent Cloud segment's income from operations was $44,411 million in fiscal year 2025, compared to $36,111 million in fiscal year 2024, an increase of 23% [10].\n\nThe More Personal Computing segment's income from operations was $20,006 million in fiscal year 2025, compared to $20,003 million in fiscal year 2024, an increase of 0% [10]."
+        },
+        {
+          "question_idx": 3,
+          "question": "What was Alphabet's research and development expenditure, and what technology areas did it prioritize?",
+          "k": 2,
+          "prompt_tokens": 508,
+          "completion_tokens": 148,
+          "latency_ms": 1068.1,
+          "answer_words": 117,
+          "answer": "Based on the provided context, Alphabet's research and development expenditure for the years 2023, 2024, and 2025 are not explicitly stated. However, we can infer that the company's research and development expenditure is included in the \"Operating activities\" section of the consolidated statements of cash flows.\n\nUnfortunately, the provided context does not specify the exact technology areas prioritized by Alphabet. However, as a leading technology company, Alphabet's research and development expenditure is likely focused on areas such as artificial intelligence, cloud computing, and cybersecurity, among others.\n\nFor a more accurate answer, I would recommend referring to Alphabet's annual reports or other publicly available sources that provide detailed information on the company's research and development expenditure and priorities."
+        },
+        {
+          "question_idx": 3,
+          "question": "What was Alphabet's research and development expenditure, and what technology areas did it prioritize?",
+          "k": 3,
+          "prompt_tokens": 639,
+          "completion_tokens": 279,
+          "latency_ms": 2022.5,
+          "answer_words": 213,
+          "answer": "Based on the provided context, I found the following information:\n\nAlphabet's research and development expenditure for the years 2023, 2024, and 2025 are not explicitly stated in the provided context. However, we can infer that the company's R&D expenditure is included in the \"Operating activities\" section of the Consolidated Statements of Cash Flows.\n\nAccording to the provided context, the R&D expenditure for the years 2023, 2024, and 2025 are not explicitly stated. However, we can see that the company's R&D expenditure is included in the \"Operating activities\" section of the Consolidated Statements of Cash Flows.\n\nHowever, we can see that the company's R&D expenditure is included in the \"Operating activities\" section of the Consolidated Statements of Cash Flows.\n\nAs for the technology areas prioritized by Alphabet, the company has identified the following areas as key competitors:\n\n- Online and offline\n- Digital content and application platform providers\n- Providers of enterprise cloud services\n- AI model developers and providers of AI products and services\n- Companies that design, manufacture, and market consumer hardware products, including businesses that have developed proprietary platforms\n- Providers of digital video services\n- Social networks\n- Providers of workspace communication and collaboration tools\n\nThese areas are mentioned in the provided context as key competitors to Alphabet's business [3]."
+        },
+        {
+          "question_idx": 3,
+          "question": "What was Alphabet's research and development expenditure, and what technology areas did it prioritize?",
+          "k": 5,
+          "prompt_tokens": 897,
+          "completion_tokens": 203,
+          "latency_ms": 7872.0,
+          "answer_words": 153,
+          "answer": "Based on the provided context, I can answer the following:\n\nAlphabet's research and development expenditure for the years 2023, 2024, and 2025 are not explicitly stated in the provided context. However, we can infer that Alphabet's research and development expenditure is included in the \"Stock-based compensation expense\" and \"Depreciation of property and equipment\" adjustments in the consolidated statements of cash flows [1].\n\nAs for the technology areas prioritized by Alphabet, the company has investments in various areas, including:\n\n- Online and offline services [3]\n- Digital content and application platform providers [3]\n- Enterprise cloud services [3]\n- AI model development and AI products and services [3]\n- Consumer hardware products [3]\n- Digital video services [3]\n- Social networks [3]\n- Workspace communication and collaboration tools [3]\n\nThese areas are mentioned in the context of Alphabet's business overview and the description of its operating segments, including Google Cloud and Other Bets [5]."
+        },
+        {
+          "question_idx": 3,
+          "question": "What was Alphabet's research and development expenditure, and what technology areas did it prioritize?",
+          "k": 8,
+          "prompt_tokens": 1347,
+          "completion_tokens": 233,
+          "latency_ms": 9691.9,
+          "answer_words": 168,
+          "answer": "Based on the provided context, Alphabet's research and development expenditure is not explicitly stated. However, we can infer that Alphabet's research and development expenses are included in the \"Stock-based compensation expense\" and \"Depreciation of property and equipment\" categories, which are mentioned in the consolidated statements of cash flows [1].\n\nAccording to the consolidated statements of comprehensive income [2], Alphabet's net income for 2023, 2024, and 2025 are $73,795 million, $100,118 million, and $132,170 million, respectively.\n\nAs for the technology areas prioritized by Alphabet, the company has investments in various areas, including:\n\n- Online and offline services [3]\n- Digital content and application platform providers [3]\n- Enterprise cloud services [3]\n- AI model developers and providers of AI products and services [3]\n- Consumer hardware products [3]\n- Digital video services [3]\n- Social networks [3]\n- Workspace communication and collaboration tools [5]\n\nThese areas are mentioned in the context of Alphabet's business overview and the description of its operating segments, including Google Cloud and Other Bets [5]."
+        },
+        {
+          "question_idx": 3,
+          "question": "What was Alphabet's research and development expenditure, and what technology areas did it prioritize?",
+          "k": 10,
+          "prompt_tokens": 1703,
+          "completion_tokens": 289,
+          "latency_ms": 12787.4,
+          "answer_words": 207,
+          "answer": "Based on the provided context, Alphabet's research and development expenditure for the year ended December 31, 2025, is not explicitly stated. However, we can infer that Alphabet's research and development expenses are included in the \"Operating activities\" section of the consolidated statements of cash flows.\n\nAccording to the context [1], Alphabet's operating activities for the year ended December 31, 2025, include:\n\n- Net income: $132,170 million\n- Adjustments:\n  - Depreciation of property and equipment: $21,136 million\n  - Stock-based compensation expense: $24,953 million\n  - Deferred income taxes: $8,348 million\n  - Loss (gain) on debt and equity securities, net: $823 million\n\nHowever, the research and development expenditure is not explicitly stated in the provided context.\n\nRegarding the technology areas prioritized by Alphabet, the context [3] mentions that Alphabet's business includes:\n\n- Online and offline services\n- Digital content and application platform providers\n- Providers of enterprise cloud services\n- AI model developers and providers of AI products and services\n- Companies that design, manufacture, and market consumer hardware products\n- Providers of digital video services\n- Social networks\n- Providers of workspace communication and collaboration tools\n\nThese areas indicate that Alphabet prioritizes research and development in various technology fields, including cloud services, AI, digital content, and consumer hardware products."
+        },
+        {
+          "question_idx": 4,
+          "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its scale of committed customer contracts?",
+          "k": 2,
+          "prompt_tokens": 342,
+          "completion_tokens": 240,
+          "latency_ms": 609.9,
+          "answer_words": 187,
+          "answer": "Based on the provided context, here's the information about Amazon Web Services (AWS) performance and committed customer contracts:\n\n1. **AWS Performance Relative to Amazon's Overall Business:**\nAWS is a significant contributor to Amazon's revenue. However, the exact percentage of AWS revenue to Amazon's overall revenue is not specified in the provided context.\n\n2. **Scale of Committed Customer Contracts:**\nThe context does not provide specific information about the scale of committed customer contracts for AWS. However, it mentions that AWS arrangements include global sales of compute, storage, database, and other services, indicating a large and global customer base.\n\n3. **Revenue Recognition for AWS:**\nRevenue from AWS is recognized when the customer uses these services, based on stand-alone selling prices [2]. This suggests that AWS revenue is primarily recognized on a usage-based model.\n\n4. **AWS Revenue Allocation:**\nRevenue from AWS is allocated to services using stand-alone selling prices [2]. This implies that AWS revenue is allocated based on the specific services used by customers.\n\nNote: The provided context is from Amazon's 10-K filing, which is a publicly available document that provides information about the company's financial performance and operations."
+        },
+        {
+          "question_idx": 4,
+          "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its scale of committed customer contracts?",
+          "k": 3,
+          "prompt_tokens": 468,
+          "completion_tokens": 234,
+          "latency_ms": 564.6,
+          "answer_words": 186,
+          "answer": "Based on the provided context, here's the information about Amazon Web Services (AWS) performance relative to Amazon's overall business and its scale of committed customer contracts:\n\n1. **Revenue Contribution**: AWS is a significant contributor to Amazon's revenue. However, the exact percentage is not provided in the given context.\n\n2. **Revenue Recognition**: Revenue from AWS is recognized when the customer uses the services, based on the quantity of services consumed using the relative standalone selling price allocation [2].\n\n3. **Subscription Services**: AWS arrangements include global sales of compute, storage, database, and other services, with revenue allocated to services using stand-alone selling prices [2].\n\n4. **Contract Terms**: AWS contracts may have terms longer than a year, similar to Google Cloud services [3].\n\n5. **Committed Customer Contracts**: The scale of committed customer contracts for AWS is not explicitly stated in the provided context. However, it can be inferred that AWS has a significant number of customers, given its broad range of services and global sales [1].\n\nNote: The exact figures and percentages are not provided in the given context, so the above information is based on the available information."
+        },
+        {
+          "question_idx": 4,
+          "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its scale of committed customer contracts?",
+          "k": 5,
+          "prompt_tokens": 728,
+          "completion_tokens": 269,
+          "latency_ms": 884.4,
+          "answer_words": 215,
+          "answer": "Based on the provided context, here are the answers to the question:\n\n1. How did Amazon Web Services (AWS) perform relative to Amazon's overall business?\n\nAWS is a significant contributor to Amazon's overall business. According to Amazon's 10-K filing [1], AWS offers a broad set of on-demand technology services, including compute, storage, database, analytics, artificial intelligence, and machine learning, and other services. AWS is a key driver of Amazon's growth, with revenue allocated to services using stand-alone selling prices and recognized when the customer uses these services [2].\n\n2. What was the scale of committed customer contracts for AWS?\n\nThe scale of committed customer contracts for AWS is not explicitly stated in the provided context. However, it is mentioned that AWS arrangements include global sales of compute, storage, database, and other services, with revenue recognized over the subscription period [2]. Additionally, Amazon's 10-K filing [4] mentions that the company provides Fulfillment by Amazon services in connection with certain of its sellers' programs, but this does not provide information on the scale of committed customer contracts for AWS.\n\nIt is worth noting that the provided context does not provide detailed information on the scale of committed customer contracts for AWS. However, it is clear that AWS is a significant contributor to Amazon's overall business and revenue."
+        },
+        {
+          "question_idx": 4,
+          "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its scale of committed customer contracts?",
+          "k": 8,
+          "prompt_tokens": 1102,
+          "completion_tokens": 178,
+          "latency_ms": 462.9,
+          "answer_words": 149,
+          "answer": "Based on the provided context, here are the answers to your questions:\n\n1. How did Amazon Web Services (AWS) perform relative to Amazon's overall business?\n\nAWS is a significant contributor to Amazon's overall business, with its revenue allocated to services using stand-alone selling prices and recognized when the customer uses these services [2]. However, the exact performance of AWS relative to Amazon's overall business is not explicitly stated in the provided context.\n\n2. What was the scale of committed customer contracts for AWS?\n\nThe scale of committed customer contracts for AWS is not explicitly stated in the provided context. However, it is mentioned that AWS arrangements include global sales of compute, storage, database, and other services, and revenue is allocated to services using stand-alone selling prices [2]. This suggests that AWS has a large and diverse customer base, but the exact scale of committed customer contracts is not disclosed."
+        },
+        {
+          "question_idx": 4,
+          "question": "How did Amazon Web Services perform relative to Amazon's overall business, and what was its scale of committed customer contracts?",
+          "k": 10,
+          "prompt_tokens": 1393,
+          "completion_tokens": 378,
+          "latency_ms": 8781.4,
+          "answer_words": 303,
+          "answer": "Based on the provided context, here are the answers to the questions:\n\n1. How did Amazon Web Services (AWS) perform relative to Amazon's overall business?\n\nAWS is a significant contributor to Amazon's overall business, with a broad set of on-demand technology services, including compute, storage, database, analytics, artificial intelligence, and machine learning [1]. AWS arrangements include global sales of compute, storage, database, and other services, with revenue allocated to services using stand-alone selling prices [2].\n\n2. What was the scale of committed customer contracts for AWS?\n\nThe scale of committed customer contracts for AWS is not explicitly stated in the provided context. However, it is mentioned that AWS arrangements include global sales of compute, storage, database, and other services, indicating a significant scale of committed customer contracts [2].\n\n3. How does AWS recognize revenue?\n\nAWS recognizes revenue primarily when the customer uses these services, based on the quantity of services rendered, such as compute or storage capacity delivered on-demand [2]. Certain services, including compute and database, are also offered as a fixed quantity, with revenue recognized over the subscription period [5].\n\n4. How does Amazon recognize revenue from AWS?\n\nAmazon recognizes revenue from AWS arrangements using stand-alone selling prices and is primarily recognized when the customer uses these services, based on the quantity of services rendered [2].\n\n5. What is the nature of AWS contracts?\n\nAWS contracts may have contract terms longer than a year, with revenues related to cloud services provided on a subscription basis recognized ratably over the contract term as the customer receives and consumes the benefits of the cloud services [3].\n\n6. What is the significance of AWS in Amazon's business?\n\nAWS is a significant contributor to Amazon's overall business, with a broad set of on-demand technology services, including compute, storage, database, analytics, artificial intelligence, and machine learning [1]."
+        },
+        {
+          "question_idx": 5,
+          "question": "What were Meta Platforms' primary sources of revenue, and how did the business perform in fiscal year 2025?",
+          "k": 2,
+          "prompt_tokens": 358,
+          "completion_tokens": 270,
+          "latency_ms": 665.8,
+          "answer_words": 213,
+          "answer": "Based on the provided context, Meta Platforms' primary sources of revenue are not explicitly stated. However, the company's business performance in fiscal year 2025 can be inferred from the consolidated financial statements.\n\nAccording to the consolidated balance sheets, Meta Platforms' revenue for the year ended December 31, 2025, was not provided. However, the company's revenue for the year ended December 31, 2024, was $117.94 billion [1].\n\nThe company's revenue streams are likely to include advertising, as mentioned in the context [2], which states that the company's AI investments support initiatives across its products and services, helping power the systems that rank content in its apps, and the tools advertisers use to reach customers.\n\nAs for the company's performance in fiscal year 2025, the consolidated financial statements do not provide a detailed breakdown of the company's revenue and expenses for that year. However, the company's revenue growth and profitability can be inferred from the consolidated balance sheets and the related notes.\n\nIt is worth noting that the company's business performance in fiscal year 2025 may have been affected by various factors, including changes in the global economy, technological advancements, and shifts in consumer behavior. However, without more detailed information, it is difficult to provide a comprehensive analysis of the company's performance for that year."
+        },
+        {
+          "question_idx": 5,
+          "question": "What were Meta Platforms' primary sources of revenue, and how did the business perform in fiscal year 2025?",
+          "k": 3,
+          "prompt_tokens": 525,
+          "completion_tokens": 187,
+          "latency_ms": 1699.7,
+          "answer_words": 147,
+          "answer": "Based on the provided context, Meta Platforms' primary sources of revenue are not explicitly stated. However, the company mentions its focus on the metaverse, artificial intelligence (AI) technologies, and innovations in social interaction, suggesting that these areas may contribute to its revenue streams.\n\nAs for the business performance in fiscal year 2025, the information is not available in the provided context. However, we can look at the revenue growth of a similar company, Microsoft, which reported a 15% increase in revenue in fiscal year 2025, driven by growth in its Intelligent Cloud, Productivity and Business Processes, and More Personal Computing segments [3].\n\nIt is worth noting that the provided context is from the company's 10-K filings, which typically provide detailed information about a company's financial performance. However, the specific information about Meta Platforms' revenue streams and fiscal year 2025 performance is not available in the provided context."
+        },
+        {
+          "question_idx": 5,
+          "question": "What were Meta Platforms' primary sources of revenue, and how did the business perform in fiscal year 2025?",
+          "k": 5,
+          "prompt_tokens": 915,
+          "completion_tokens": 252,
+          "latency_ms": 5798.6,
+          "answer_words": 179,
+          "answer": "Based on the provided context, I can answer the following:\n\n1. Primary sources of revenue for Meta Platforms:\nUnfortunately, the provided context does not explicitly mention Meta Platforms' primary sources of revenue. However, it does mention the metaverse and AI technologies as areas of innovation and investment [2]. \n\n2. Meta Platforms' business performance in fiscal year 2025:\nUnfortunately, the provided context does not explicitly mention Meta Platforms' business performance in fiscal year 2025. However, it does mention the certification of the company's financial statements by the Chief Financial Officer, Susan Li, as of January 28, 2026 [5]. \n\nHowever, I can provide information on Microsoft's business performance in fiscal year 2025, which is mentioned in the context [3] and [4]. Microsoft's revenue increased by $36.6 billion or 15% in fiscal year 2025, driven by growth in Intelligent Cloud, Productivity and Business Processes, and More Personal Computing segments [3]. The revenue breakdown by significant product and service offerings is as follows: Server products and cloud services ($98,435 million), Microsoft 365 Commercial products ($83,111 million), and More Personal Computing ($100,178 million) [4]."
+        },
+        {
+          "question_idx": 5,
+          "question": "What were Meta Platforms' primary sources of revenue, and how did the business perform in fiscal year 2025?",
+          "k": 8,
+          "prompt_tokens": 1460,
+          "completion_tokens": 193,
+          "latency_ms": 14009.9,
+          "answer_words": 151,
+          "answer": "Based on the provided context, I can answer the following questions:\n\n1. What were Meta Platforms' primary sources of revenue?\n\nMeta Platforms' primary sources of revenue were not explicitly stated in the provided context. However, based on the information provided in [2], Meta Platforms is innovating in artificial intelligence (AI) technologies to build new experiences that help make their platform more social, useful, and immersive. This suggests that AI-related initiatives are a key area of focus for the company.\n\n2. How did the business perform in fiscal year 2025?\n\nUnfortunately, the provided context does not contain any information about Meta Platforms' financial performance in fiscal year 2025. However, it does contain information about Microsoft's financial performance in fiscal year 2025, which is not relevant to the question.\n\nTo answer the question, I would need access to Meta Platforms' 10-K filing for fiscal year 2025, which is not provided in the context."
+        },
+        {
+          "question_idx": 5,
+          "question": "What were Meta Platforms' primary sources of revenue, and how did the business perform in fiscal year 2025?",
+          "k": 10,
+          "prompt_tokens": 1838,
+          "completion_tokens": 129,
+          "latency_ms": 13610.6,
+          "answer_words": 87,
+          "answer": "Based on the provided context, Meta Platforms' primary sources of revenue were:\n\n1. Advertising [9]\n2. Other revenue, including hardware and digital goods [7]\n\nAs for the business performance in fiscal year 2025, Meta Platforms reported:\n\n1. Total revenue of $200.97 billion [9]\n2. Revenue growth of 22% compared to fiscal year 2024 [9]\n3. Operating income of $44.8 billion [5]\n4. Net income of $29.1 billion [5]\n\nNote that the provided context does not include detailed information on Meta Platforms' revenue breakdown by segment or product."
+        }
+      ]
+    }
+  }
+}
