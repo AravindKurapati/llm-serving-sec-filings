@@ -127,19 +127,22 @@ export default function App() {
       return { bothReady: false, llamaBest: false, mistralBest: false, label: '' }
     }
 
-    const llamaBest = llamaTtft <= mistralTtft
-    const mistralBest = mistralTtft <= llamaTtft
-    const faster = llamaBest ? 'LLaMA' : 'Mistral'
-    const ratio = llamaBest
-      ? (mistralTtft / Math.max(llamaTtft, 1)).toFixed(1)
-      : (llamaTtft / Math.max(mistralTtft, 1)).toFixed(1)
+    const tied = llamaTtft === mistralTtft
+    const llamaBest = !tied && llamaTtft < mistralTtft
+    const mistralBest = !tied && mistralTtft < llamaTtft
 
-    return {
-      bothReady,
-      llamaBest,
-      mistralBest,
-      label: `${faster} led first-token latency by ${ratio}x`,
+    let label
+    if (tied) {
+      label = `Both models matched first-token latency at ${llamaTtft}ms`
+    } else {
+      const faster = llamaBest ? 'LLaMA' : 'Mistral'
+      const ratio = llamaBest
+        ? (mistralTtft / Math.max(llamaTtft, 1)).toFixed(1)
+        : (llamaTtft / Math.max(mistralTtft, 1)).toFixed(1)
+      label = `${faster} led first-token latency by ${ratio}x`
     }
+
+    return { bothReady, llamaBest, mistralBest, label }
   }, [llamaMetrics, mistralMetrics])
 
   function switchTab(tab) {
