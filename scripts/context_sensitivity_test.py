@@ -111,26 +111,33 @@ def count_approx_tokens(text):
     return int(len(text.split()) / 0.75)
 
 
-def query_groq(question, contexts, groq_model):
-    """Call Groq and return (answer, latency_ms, prompt_token_estimate)."""
-    from groq import Groq
-    client  = Groq(api_key=os.environ["GROQ_API_KEY"])
-    prompt  = build_prompt(question, contexts)
+def query_groq(question, contexts, groq_model, max_retries=5):
+    """Call Groq and return (answer, latency_ms, prompt_tokens, completion_tokens)."""
+    from groq import Groq, RateLimitError
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    prompt = build_prompt(question, contexts)
 
-    t0 = time.perf_counter()
-    resp = client.chat.completions.create(
-        model=groq_model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.0,
-        max_tokens=400,
-    )
-    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
-
-    answer           = resp.choices[0].message.content.strip()
-    prompt_tokens    = resp.usage.prompt_tokens      # actual count from API
-    completion_tokens = resp.usage.completion_tokens
-
-    return answer, latency_ms, prompt_tokens, completion_tokens
+    delay = 10.0
+    for attempt in range(1, max_retries + 1):
+        try:
+            t0 = time.perf_counter()
+            resp = client.chat.completions.create(
+                model=groq_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=400,
+            )
+            latency_ms        = round((time.perf_counter() - t0) * 1000, 1)
+            answer            = resp.choices[0].message.content.strip()
+            prompt_tokens     = resp.usage.prompt_tokens
+            completion_tokens = resp.usage.completion_tokens
+            return answer, latency_ms, prompt_tokens, completion_tokens
+        except RateLimitError as exc:
+            if attempt == max_retries:
+                raise
+            wait = delay * (2 ** (attempt - 1))
+            print(f"    [rate-limit] attempt {attempt}/{max_retries}, sleeping {wait:.0f}s … ({exc})")
+            time.sleep(wait)
 
 
 # ── Core experiment loop ──────────────────────────────────────────────────────

@@ -1,0 +1,35 @@
+{
+  "timestamp": "20260511_combined",
+  "benchmark": "benchmark_20260415_190523.json",
+  "source": "real vLLM outputs (Modal A10G — LLaMA 3.1 8B + Mistral 7B)",
+  "retrieval": {"index": "FAISS IndexFlatIP", "k": 5, "embed_model": "BAAI/bge-small-en-v1.5"},
+  "judge": {"model": "llama-3.3-70b-versatile", "max_tokens": 4096},
+  "metrics_scored": ["faithfulness", "answer_relevancy"],
+  "metrics_omitted": {
+    "context_precision": "requires ground_truth; benchmark questions lack GT pairs"
+  },
+  "scores": {
+    "llama": {
+      "faithfulness": 0.9452,
+      "answer_relevancy": 0.9353,
+      "per_question": [
+        {"question": "What are Apple's main supply chain risks?",                  "faithfulness": 0.9762, "answer_relevancy": 0.9956},
+        {"question": "How does Microsoft describe its cloud revenue growth?",      "faithfulness": 1.0000, "answer_relevancy": 0.8479},
+        {"question": "What does Meta say about AI infrastructure investment?",     "faithfulness": 1.0000, "answer_relevancy": 0.9247},
+        {"question": "How has Google's advertising revenue changed over 3 years?", "faithfulness": 0.7500, "answer_relevancy": 0.9454},
+        {"question": "What cybersecurity risks does Amazon disclose?",             "faithfulness": 1.0000, "answer_relevancy": 0.9631}
+      ]
+    },
+    "mistral": {
+      "faithfulness": 0.8933,
+      "answer_relevancy": 0.8819,
+      "per_question": [
+        {"question": "What are Apple's main supply chain risks?",                  "faithfulness": 1.0000, "answer_relevancy": 0.9956},
+        {"question": "How does Microsoft describe its cloud revenue growth?",      "faithfulness": 0.6667, "answer_relevancy": 0.9200},
+        {"question": "What does Meta say about AI infrastructure investment?",     "faithfulness": 1.0000, "answer_relevancy": 0.7754},
+        {"question": "How has Google's advertising revenue changed over 3 years?", "faithfulness": 0.8000, "answer_relevancy": 0.8074},
+        {"question": "What cybersecurity risks does Amazon disclose?",             "faithfulness": 1.0000, "answer_relevancy": 0.9111}
+      ]
+    }
+  }
+}
