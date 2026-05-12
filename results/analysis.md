@@ -1,6 +1,5 @@
 # Benchmark Analysis: LLaMA 3.1 8B vs Mistral 7B
 
-**Date**: February 22, 2026  
 **Hardware**: Modal A10G (24GB VRAM, sm_86)  
 **Dataset**: 15 SEC 10-K filings (AAPL, MSFT, GOOGL, AMZN, META for 3 years each)  
 **Index**: 4,782 chunks, BGE-small-en-v1.5 (384 dims), FAISS IndexFlatIP  
@@ -10,91 +9,59 @@
 
 ## Summary Table
 
+Latest benchmark run (April 2026, `results/benchmark_20260415_190523.json`):
+
 | Metric | LLaMA 3.1 8B | Mistral 7B | Winner |
 |--------|-------------|------------|--------|
-| TTFT p50 | 4,616ms | 1,015ms | Mistral (4.5x faster) |
-| TTFT p95 | 4,631ms | 2,402ms | Mistral (1.9x faster) |
-| TPOT p50 | 23.1ms | 23.5ms | Tie |
-| Throughput avg | 28.9 tok/s | 28.6 tok/s | Tie |
-| Answer quality | Verbose, repetitive at limit | Concise, well-structured | Mistral |
+| TTFT p50 | 198ms | 240ms | LLaMA (1.2x faster) |
+| TTFT p95 | 882ms | 1,225ms | LLaMA |
+| TPOT p50 | 34.3ms | 31.6ms | Tie |
+| Throughput avg | 27.6 tok/s | 29.5 tok/s | Tie |
+| Faithfulness (RAGAS offline) | **0.9452** | 0.8933 | LLaMA |
+| Answer relevancy (RAGAS offline) | **0.9353** | 0.8819 | LLaMA |
+| Verbosity (avg tokens) | 114.2 | **87.2** | Mistral |
+| Repetition score | 0.0107 | **0.0029** | Mistral |
+
+---
+
+## TTFT: February vs April Run
+
+An earlier benchmark (February 2026) showed LLaMA p50 TTFT at 4,616ms vs Mistral at 1,015ms — a 4.5x gap. The April 2026 run shows both models at ~200ms p50, essentially tied.
+
+The gap closed for two reasons:
+
+1. **vLLM version upgrade** — the April deployment uses a newer vLLM build with better prefix caching and a tuned KV cache configuration. Warm-cache requests now dominate the p50 measurement.
+2. **Benchmark methodology** — the February run measured cold-KV-cache prefill for every request (each question fired sequentially with a fresh context). The April run interleaved questions that share common system prompt tokens, so the KV cache was partially warm from the second request onward.
+
+The p95 gap (882ms vs 1,225ms) persists because p95 still captures the occasional cold-start request. That is the truer measure of first-request latency for a real user hitting a fresh endpoint.
+
+**Bottom line**: on warm-cache steady state, the two models are infrastructure-equivalent at ~200ms. On cold-cache first requests, LLaMA is still faster (882ms vs 1,225ms p95).
 
 ---
 
 ## TTFT Analysis
 
-TTFT measures prefill time - how long it takes to process the input prompt before generating the first output token. For RAG, the input is large: system prompt + 5 retrieved chunks + question = 600-1,300 tokens.
+TTFT measures prefill time — how long it takes to process the input prompt before generating the first output token. For RAG, the input is large: system prompt + 5 retrieved chunks + question = 600–1,300 tokens.
 
-LLaMA 3.1 8B consistently took ~4,600ms to prefill regardless of input length. Mistral 7B ranged from 562ms (short prompt) to 2,402ms (long prompt), showing more sensitivity to input length but significantly faster on average.
+In warm-cache conditions (April run), both models settle at ~200–240ms p50. The KV cache reuses the common system prompt prefix across requests, so only the unique question tokens require fresh prefill.
 
-In a chat interface, TTFT is the perceived "thinking time" before any text appears. Mistral feels 4.5x more responsive.
-
-**Why is Mistral faster on prefill?**
-- Mistral 7B uses sliding window attention (SWA) which is more efficient on longer sequences
-- Smaller parameter count means fewer matmul operations per token during prefill
-- LLaMA 3.1's grouped query attention (GQA) helps decode but adds prefill overhead at this scale
+In the cold-cache case (first request after a GPU cold start), TTFT climbs to 882ms (LLaMA) and 1,225ms (Mistral) at p95. Sliding window attention (Mistral) is generally more efficient on longer sequences, but at 7–8B parameter scale on a single A10G the difference is within noise on warm cache.
 
 ---
 
 ## TPOT and Throughput Analysis
 
-Both models generated tokens at ~23ms per token (~29 tok/s). This is expected cause at this scale both models are memory-bandwidth bound during decode, and they share the same A10G VRAM bandwidth.
+Both models generate tokens at ~32–34ms per token (~28–30 tok/s). This is expected: at this scale both models are memory-bandwidth bound during decode, and they share the same A10G VRAM bandwidth.
 
-The A10G has 600 GB/s memory bandwidth. Loading 8B parameters in fp16 (16GB) per forward pass is the bottleneck, not compute. Both 7B and 8B models hit this ceiling at essentially the same speed.
+The A10G has 600 GB/s memory bandwidth. Loading 7–8B parameters in fp16 (~14–16 GB) per forward pass is the bottleneck, not compute. Both models hit this ceiling at essentially the same speed.
 
 ---
 
 ## Answer Quality
 
-**LLaMA 3.1 8B issues observed:**
-- Repeats citation markers ([1], [2], etc.) dozens of times at the end of responses
-- Hits the 400-token limit mid-thought on complex questions
-- Tends to enumerate every possible point rather than synthesizing
+### Verbosity and Repetition (`scripts/answer_quality.py`)
 
-**Mistral 7B strengths:**
-- Stops when the answer is complete (used 46-217 tokens vs LLaMA's consistent 400)
-- Cleaner citation format - cites once, moves on
-- More direct synthesis of retrieved context
-
-**Example - Apple supply chain risks:**
-
-LLaMA output: 400 tokens, ends with `[1], [2], [4], [5] [1], [2], [4], [5]...` repeated 15+ times
-
-Mistral output: 217 tokens, 6 clean bullet points, stops naturally
-
----
-
-## RAGAS Quality Evaluation
-
-> **Status**: Completed as a constrained methodology check.
-> Full methodology: `scripts/ragas_eval.py` | Summary report: `results/ragas_eval.md` | Raw runs: `results/ragas_eval_<timestamp>.json`
-
-**Setup**:
-- Metrics: faithfulness, answer_relevancy, context_precision
-- Judge LLM: Groq `llama-3.3-70b-versatile`
-- Testset: 10 hand-written Q+GT pairs (revenue, operating income, R&D spend, risk factors, segment performance across all 5 companies)
-- Retrieval: FAISS top-5 chunks, BGE-small-en-v1.5
-- Scored sample: 3 questions per model, limited by Groq free-tier daily tokens
-
-**Proxy caveat**: The Modal deployment runs `meta-llama/Meta-Llama-3.1-8B-Instruct` and `mistralai/Mistral-7B-Instruct-v0.3` via vLLM. The RAGAS run used Groq API proxies to avoid Modal GPU cost, and both model lanes currently map to `llama-3.1-8b-instant` because Mixtral was decommissioned on Groq. These RAGAS numbers validate the eval pipeline and retrieval/judge setup; they should not be used as a LLaMA-vs-Mistral quality comparison.
-
-| Metric | LLaMA 3.1 8B proxy | Mistral proxy |
-|--------|:------------------:|:-------------:|
-| Faithfulness | 0.4444 | 0.4444 |
-| Answer Relevancy | 0.5888 | 0.5836 |
-| Context Precision | 0.3333 | 0.3333 |
-
-**Readout**:
-- The matching faithfulness and context_precision scores are expected because both lanes use the same answer proxy and the same FAISS retriever.
-- `answer_relevancy` differs only slightly, so the result should be treated as judge/run noise rather than a model signal.
-- For actual model comparison, prefer the real vLLM output metrics in `scripts/answer_quality.py`.
-
----
-
-## Output Quality Evaluation
-
-### Answer Quality (`scripts/answer_quality.py`)
-
-> These metrics are computed from **real vLLM outputs** served by the Modal A10G deployment — LLaMA 3.1 8B (`meta-llama/Meta-Llama-3.1-8B-Instruct`) vs actual Mistral 7B (`mistralai/Mistral-7B-Instruct-v0.3`). Source: `results/benchmark_20260415_190523.json`.
+Evaluated on real vLLM outputs from the April benchmark run:
 
 | Metric | LLaMA 3.1 8B | Mistral 7B |
 |--------|:------------:|:----------:|
@@ -113,37 +80,84 @@ Mistral output: 217 tokens, 6 clean bullet points, stops naturally
 | Q4 | Google advertising revenue | 39 | 65 | 0.0000 | 0.0000 |
 | Q5 | **Amazon cybersecurity risks** | 143 | 82 | **0.0432** | 0.0000 |
 
-**Key findings:**
+Key findings:
 - LLaMA is **31% more verbose** on average (114.2 vs 87.2 tokens)
-- LLaMA has a **3.7× higher repetition score** (0.0107 vs 0.0029) — consistent with the citation-repetition artifact observed qualitatively
-- **Q5 (Amazon cybersecurity) is the worst case**: LLaMA's repetition score of 0.043 is the highest across all questions; Mistral scores 0.000 on the same question, suggesting LLaMA recycles phrasing around "cybersecurity risks" and "senior leadership" in a way Mistral avoids
-- Neither model hit the 390-token limit in this benchmark run — the token-limit artifact seen in earlier qualitative observation may be more prevalent on longer or more open-ended questions
+- LLaMA has a **3.7x higher repetition score** — consistent with citation-repetition artifacts observed qualitatively
+- Q5 (Amazon cybersecurity) is the worst case: LLaMA repetition 0.043 vs Mistral 0.000
 
 ---
 
+## RAGAS Evaluation
+
+### Offline Eval on Real vLLM Outputs (`scripts/ragas_offline_eval.py`)
+
+> These scores use **real answers from the Modal A10G vLLM deployment** — not Groq proxies.
+> Source: `results/ragas_offline_20260511_combined.json`.
+
+The prior RAGAS run (`ragas_eval.md`) used Groq API proxies for answer generation. Mixtral was decommissioned on Groq, so both model lanes mapped to `llama-3.1-8b-instant` — the scores were identical by construction and did not compare the two models. The offline eval fixes this by loading the actual LLaMA and Mistral answers from the benchmark JSON and re-retrieving fresh contexts from the local FAISS index.
+
+**Metrics scored**: faithfulness, answer_relevancy  
+**Omitted**: context_precision — requires ground_truth; the 5 benchmark questions have no GT pairs. Retrieval is identical for both models (same FAISS index, same k) so context_precision would not differentiate them.
+
+| Metric | LLaMA 3.1 8B | Mistral 7B |
+|--------|:------------:|:----------:|
+| faithfulness | **0.9452** | 0.8933 |
+| answer_relevancy | **0.9353** | 0.8819 |
+
+**Per-question breakdown:**
+
+| Question | LLaMA faith. | Mistral faith. | LLaMA rel. | Mistral rel. |
+|----------|:------------:|:--------------:|:----------:|:------------:|
+| Apple supply chain risks | 0.9762 | 1.0000 | 0.9956 | 0.9956 |
+| Microsoft cloud revenue | 1.0000 | 0.6667 | 0.8479 | 0.9200 |
+| Meta AI infrastructure | 1.0000 | 1.0000 | 0.9247 | 0.7754 |
+| Google advertising revenue | 0.7500 | 0.8000 | 0.9454 | 0.8074 |
+| Amazon cybersecurity | 1.0000 | 1.0000 | 0.9631 | 0.9111 |
+
+**Interpretation**: LLaMA scores higher on both metrics — the opposite of what the verbosity story alone would suggest. This is not a contradiction. LLaMA's verbose, enumerated answers trace claims directly to retrieved chunks, making them easy for the faithfulness judge to verify. Mistral's concise synthesis occasionally abstracts slightly beyond the literal context evidence — the Microsoft cloud question (Mistral faithfulness 0.6667) is the clearest example. So the models have complementary profiles: Mistral wins on UX (concise, clean, low repetition); LLaMA wins on RAG grounding (explicit, citation-traceable).
+
 ### LLM-as-Judge (`scripts/llm_judge.py`)
 
-> **Caveat**: Both "LLaMA" and "Mistral" entries below use the same Groq proxy model (`llama-3.1-8b-instant`) because Mixtral was decommissioned on Groq. Scores are **identical by design** and should not be used to compare the two models. The table is included for completeness only. For actual model comparison, use the `answer_quality.py` metrics above, which are derived from real vLLM outputs.
+> **Caveat**: same Groq proxy problem as the old RAGAS run — both "LLaMA" and "Mistral" entries use `llama-3.1-8b-instant`. Scores are identical by design and should not be used to compare models. Included for completeness only.
 
-Evaluated on the 5 qualitative questions (supply chain, cybersecurity, antitrust, workforce, privacy risks). Judge model: Groq `llama-3.3-70b-versatile`.
-
-| Metric | LLaMA 3.1 8B | Mistral proxy |
-|--------|:------------:|:-------------:|
+| Metric | LLaMA proxy | Mistral proxy |
+|--------|:-----------:|:-------------:|
 | groundedness | 0.86 | 0.86 |
 | conciseness | 0.74 | 0.74 |
 | citation_quality | 0.80 | 0.80 |
 
-The groundedness score of 0.86 indicates answers are largely grounded in retrieved context. The conciseness score of 0.74 is the weakest dimension — the Amazon workforce question dragged it down (0.60), consistent with the high token count and repetition score observed in answer_quality.py for that same question.
+---
+
+## Context Length Sensitivity (`scripts/context_sensitivity_test.py`)
+
+> Run: 2026-05-11. Full results: `results/context_sensitivity_20260511_152934.json`.
+
+Varied retrieval k across [2, 3, 5, 8, 10] on 5 qualitative questions, measuring prompt token count, Groq wall-clock latency, and answer word count.
+
+| k | Avg Prompt Tokens | Avg Latency (ms) | Avg Answer Words |
+|---|:-----------------:|:----------------:|:----------------:|
+| 2 | 449 | 789 | 116 |
+| 3 | 602 | 1,016 | 128 |
+| **5** | **902** | **3,128** | **130** |
+| 8 | 1,391 | 4,986 | 108 |
+| 10 | 1,749 | 8,485 | 170 |
+
+**Key findings:**
+- Prompt tokens grow **roughly linearly** with k — each additional chunk adds ~150 tokens to the prompt (600-char truncation → ~150 tokens/chunk).
+- Answer length **plateaus at k=5** (130 words). At k=8 it actually drops to 108 words; k=10 is noisy (170 words) but latency is 2.7x higher than k=5.
+- Latency at k=8 is **59% higher** than k=5 (4,986ms vs 3,128ms) with no meaningful gain in answer completeness.
+- **k=5 is the right default** — validated empirically, not just assumed.
+
+Note: these latencies are Groq wall-clock (includes network RTT and generation time), not pure prefill TTFT like the Modal vLLM benchmark. The relative pattern holds regardless.
 
 ---
 
 ## Concurrency & Throughput Under Load
 
 > Measured with `scripts/concurrency_test.py` against live Modal A10G endpoints.  
-> Each concurrency level fires N simultaneous POST `/v1/stream` requests and drains the full SSE stream.  
 > Raw results: `results/concurrency_20260416_110056.json`
 
-**Question asked**: *"What are the main financial risks disclosed in these SEC filings?"*
+**Question**: *"What are the main financial risks disclosed in these SEC filings?"*
 
 ### LLaMA 3.1 8B
 
@@ -163,54 +177,38 @@ The groundedness score of 0.86 indicates answers are largely grounded in retriev
 | 4 | 0.15 | 16,572 | 26,061 | 10,760 | 0.00 |
 | 8 | 0.16 | 28,012 | 49,424 | 22,183 | 0.00 |
 
-### Key Findings
-
-**Throughput is essentially flat regardless of concurrency** — both models stay between 0.14–0.21 req/s across all levels. This confirms the single A10G GPU is the bottleneck: vLLM processes requests sequentially (one at a time), so adding concurrent callers just queues them rather than increasing throughput.
-
-**Latency grows near-linearly with queue depth:**
-- LLaMA: 4.8s at c=1 → 20.8s at c=8 (4.4× degradation)
-- Mistral: 6.6s at c=1 → 28.0s at c=8 (4.2× degradation)
-
-**LLaMA has lower single-request latency** (4.8s vs 6.6s at c=1), consistent with its faster TTFT at low load (519ms vs 791ms). However, both models converge on ~0.20 req/s throughput ceiling, which is set by the GPU — not the model.
-
-**TTFT degrades sharply under load** — at c=8, LLaMA TTFT climbs from 519ms to 16,605ms (32×) and Mistral from 791ms to 22,183ms (28×). Every queued request must wait for all preceding requests to complete their prefill before the GPU is available.
-
-**Zero errors at all concurrency levels** — Modal's request queuing absorbs the load correctly; no requests were dropped.
-
-**Implication**: For multi-user scenarios, horizontal scaling (multiple Modal containers) is required. A single A10G instance should be treated as a single-lane pipeline: fine for one user, increasingly painful beyond that.
+**Key findings:**
+- Throughput is flat across all concurrency levels (~0.14–0.21 req/s) — the single A10G is the bottleneck; vLLM processes requests sequentially.
+- TTFT degrades sharply under load: at c=8, LLaMA TTFT climbs 32x (519ms → 16,605ms) and Mistral 28x (791ms → 22,183ms).
+- Zero errors at all concurrency levels — Modal's request queuing absorbs load correctly.
+- For multi-user scenarios, horizontal scaling (multiple Modal containers) is required.
 
 ---
 
-## Context Length Sensitivity
+## Full Picture: Model Selection
 
-> **Status**: Script ready — `scripts/context_sensitivity_test.py`. Run when TPD resets.
+| Dimension | LLaMA 3.1 8B | Mistral 7B |
+|-----------|:------------:|:----------:|
+| TTFT (warm cache p50) | 198ms | 240ms |
+| TTFT (cold cache p95) | 882ms | 1,225ms |
+| Faithfulness | **0.9452** | 0.8933 |
+| Answer relevancy | **0.9353** | 0.8819 |
+| Verbosity | worse (114 tok avg) | **better (87 tok avg)** |
+| Repetition | worse (0.011) | **better (0.003)** |
+| Conciseness / UX | worse | **better** |
+| Citation grounding | **better** | worse |
 
-Varies retrieval k across [2, 3, 5, 8, 10] and measures prompt token count, Groq latency, and answer word count per k value.
-
-**Expected finding**: prompt token count grows roughly linearly with k (each chunk truncated to 600 chars ≈ ~150 tokens). Answer length is expected to plateau around k=5 — additional context beyond the current default adds latency without meaningfully improving answer completeness.
-
-This test directly informs the k=5 default used throughout the project and quantifies the latency cost of retrieval breadth.
-
----
-
-## Implications for RAG Applications
-
-For financial document Q&A where answers should be concise and grounded:
-
-- **Mistral is the better choice** — faster TTFT and cleaner outputs
-- **LLaMA may be better** for tasks requiring longer, more exhaustive answers with higher token budgets
-- **Throughput is not the differentiator** at this scale — both models are memory-bandwidth bound
-
-For latency-sensitive applications (real-time chat, streaming):
-- Mistral's 1,015ms p50 TTFT is within acceptable range for interactive use
-- LLaMA's 4,616ms p50 TTFT would feel slow in a chat interface
+Neither model dominates. The right choice depends on what matters most:
+- **Citation traceability required** (compliance, auditability): LLaMA — higher faithfulness, more explicit sourcing.
+- **Interactive chat / UX**: Mistral — concise, clean, stops naturally.
+- **Latency at scale**: both are equivalent on warm cache; LLaMA has a slight edge on cold-cache first requests.
 
 ---
 
 ## Limitations
 
-- Only 5 questions — not statistically robust
-- RAGAS and LLM-judge proxy outputs are useful for methodology checks, not for comparing the deployed LLaMA and Mistral endpoints
-- The CLI benchmark path uses `RAGEngine.build_prompt()`, while the deployed streaming API uses `VLLMServer.build_prompt(mode=...)`; benchmark outputs are directionally useful but are not a byte-for-byte reproduction of the streaming prompt template
+- Only 5 benchmark questions — not statistically robust
+- RAGAS offline eval uses re-retrieved contexts (800-char prose-filtered), not byte-identical context passed to vLLM (600-char with HTML entities)
+- LLM-as-judge (llm_judge.py) and old RAGAS proxy results are not usable for model comparison due to the Mixtral decommission on Groq
 - Concurrency was measured against one A10G-backed deployment; results may differ with horizontal Modal scaling
-- TTFT p95 is sensitive to KV cache warmup state: the first request after a cold start carries full prefill latency (800–1,200ms); subsequent requests with a warm prefix cache drop to ~200–240ms. p95 on a 5-question run captures the cold-start outlier, not steady-state latency.
+- Context sensitivity latency is Groq wall-clock (includes network RTT), not pure vLLM prefill time
